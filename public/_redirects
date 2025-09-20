@@ -1,7 +1,9 @@
-# Netlify redirects for SPA routing
-# This ensures all routes go to index.html for client-side routing
-
+# SPA routing - redirect all non-file requests to index.html
 /*    /index.html   200
 
-# API proxy rules (if using Netlify Functions)
-/api/*  /.netlify/functions/:splat  200
+# Security headers
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
