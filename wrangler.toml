@@ -3,24 +3,4 @@ name = "fixturecast"
 compatibility_date = "2024-01-15"
 pages_build_output_dir = "dist"
 
-[env.production]
-[[env.production.kv_namespaces]]
-binding = "PREDICTIONS_KV"
-id = "f00e18bfc6a44f3d876bd4448003e1f5"
-preview_id = "f00e18bfc6a44f3d876bd4448003e1f5"
-
-[[env.production.kv_namespaces]]
-binding = "PERFORMANCE_KV"
-id = "performance_monitoring_kv_id_here"
-preview_id = "performance_monitoring_kv_id_here"
-
-[[env.production.kv_namespaces]]
-binding = "ERRORS_KV"
-id = "error_tracking_kv_id_here"
-preview_id = "error_tracking_kv_id_here"
-
-# Environment variables (add these in Cloudflare dashboard)
-[env.production.vars]
-# Add your environment variables in Cloudflare Pages dashboard:
-# VITE_FOOTBALL_API_KEY = "your_api_key_here"
-# FOOTBALL_API_KEY = "your_api_key_here"
+# Note: Set environment variables in the Cloudflare Pages dashboard UI
