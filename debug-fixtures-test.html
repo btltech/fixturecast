@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fixtures Debug Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #111; color: #fff; }
+        .fixture { background: #333; margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .loading { color: #ffa500; }
+        .error { color: #ff6b6b; }
+        .success { color: #51cf66; }
+    </style>
+</head>
+<body>
+    <h1>FixtureCast API Debug Test</h1>
+    <div id="status">Testing API...</div>
+    <div id="results"></div>
+
+    <script>
+        async function testApi() {
+            const statusEl = document.getElementById('status');
+            const resultsEl = document.getElementById('results');
+            
+            try {
+                statusEl.innerHTML = '<span class="loading">🔄 Fetching Premier League fixtures...</span>';
+                
+                const response = await fetch('https://v3.football.api-sports.io/fixtures?league=39&season=2025&date=2025-09-20', {
+                    headers: {
+                        'X-RapidAPI-Key': '89e32953fd6a91a630144cf150bcf151',
+                        'X-RapidAPI-Host': 'v3.football.api-sports.io'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.response && data.response.length > 0) {
+                    statusEl.innerHTML = `<span class="success">✅ Success! Found ${data.response.length} fixtures</span>`;
+                    
+                    data.response.forEach(fixture => {
+                        const div = document.createElement('div');
+                        div.className = 'fixture';
+                        div.innerHTML = `
+                            <strong>${fixture.teams.home.name} vs ${fixture.teams.away.name}</strong><br>
+                            Status: ${fixture.fixture.status.long}<br>
+                            Date: ${new Date(fixture.fixture.date).toLocaleString()}<br>
+                            Venue: ${fixture.fixture.venue.name}
+                        `;
+                        resultsEl.appendChild(div);
+                    });
+                } else {
+                    statusEl.innerHTML = '<span class="error">❌ No fixtures found</span>';
+                }
+            } catch (error) {
+                statusEl.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+                console.error('API Error:', error);
+            }
+        }
+        
+        testApi();
+    </script>
+</body>
+</html>

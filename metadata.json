@@ -1,0 +1,5 @@
+{
+  "name": "FixtureCast",
+  "description": "FixtureCast aggregates data from top European football leagues and uses advanced statistical models to generate probable outcomes for every match, helping fans make informed decisions.",
+  "requestFramePermissions": []
+}

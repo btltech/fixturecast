@@ -1,0 +1,208 @@
+/* Unified Dark Theme System for Sports Fixture App */
+
+/* CSS Custom Properties for Dark Theme - Unified Color Scheme */
+:root {
+  /* Base Colors - Dark Theme */
+  --color-background: #111827; /* gray-900 */
+  --color-surface: #1f2937; /* gray-800 */
+  --color-surface-elevated: #374151; /* gray-700 */
+  --color-surface-hover: #4b5563; /* gray-600 */
+  --color-surface-active: #6b7280; /* gray-500 */
+
+  /* Text Colors - Consistent with dark theme */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #d1d5db; /* gray-300 */
+  --color-text-tertiary: #9ca3af; /* gray-400 */
+  --color-text-inverse: #111827; /* gray-900 */
+  --color-text-muted: #6b7280; /* gray-500 */
+
+  /* Border Colors - Gray-based for consistency */
+  --color-border: #374151; /* gray-700 */
+  --color-border-light: #4b5563; /* gray-600 */
+  --color-border-strong: #6b7280; /* gray-500 */
+
+  /* Accent Colors - Blue theme for consistency */
+  --color-primary: #2563eb; /* blue-600 */
+  --color-primary-hover: #1d4ed8; /* blue-700 */
+  --color-primary-active: #1e40af; /* blue-800 */
+  --color-primary-light: #dbeafe;
+
+  --color-secondary: #4f46e5; /* indigo-600 */
+  --color-secondary-hover: #4338ca; /* indigo-700 */
+  --color-secondary-light: #e0e7ff;
+
+  /* Status Colors */
+  --color-success: #10b981;
+  --color-success-hover: #059669;
+  --color-success-light: #d1fae5;
+  --color-success-text: #065f46;
+
+  --color-warning: #f59e0b;
+  --color-warning-hover: #d97706;
+  --color-warning-light: #fef3c7;
+  --color-warning-text: #92400e;
+
+  --color-error: #ef4444;
+  --color-error-hover: #dc2626;
+  --color-error-light: #fee2e2;
+  --color-error-text: #991b1b;
+
+  --color-info: #06b6d4;
+  --color-info-hover: #0891b2;
+  --color-info-light: #cffafe;
+  --color-info-text: #164e63;
+
+  /* Live Match Colors */
+  --color-live: #ef4444;
+  --color-live-hover: #dc2626;
+  --color-live-light: #fee2e2;
+  --color-live-text: #991b1b;
+
+  /* Team Colors - Vibrant and accessible in light theme */
+  --color-team-manchester-city: #6c5ce7;
+  --color-team-manchester-united: #e17055;
+  --color-team-arsenal: #fd79a8;
+  --color-team-chelsea: #00b894;
+  --color-team-liverpool: #e84393;
+  --color-team-tottenham: #0984e3;
+  --color-team-real-madrid: #fdcb6e;
+  --color-team-barcelona: #6c5ce7;
+  --color-team-bayern-munich: #e17055;
+  --color-team-psg: #00b894;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* Transitions */
+  --transition-fast: 150ms ease-in-out;
+  --transition-normal: 250ms ease-in-out;
+  --transition-slow: 350ms ease-in-out;
+}
+
+/* Base styles using CSS custom properties */
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+/* Utility classes for components */
+.bg-primary {
+  background-color: var(--color-primary);
+}
+
+.bg-surface {
+  background-color: var(--color-surface);
+}
+
+.bg-surface-elevated {
+  background-color: var(--color-surface-elevated);
+}
+
+.text-primary {
+  color: var(--color-text-primary);
+}
+
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.text-tertiary {
+  color: var(--color-text-tertiary);
+}
+
+.border-primary {
+  border-color: var(--color-border);
+}
+
+.border-light {
+  border-color: var(--color-border-light);
+}
+
+.border-strong {
+  border-color: var(--color-border-strong);
+}
+
+/* Team color utilities */
+.team-color-manchester-city {
+  color: var(--color-team-manchester-city);
+}
+
+.team-color-manchester-united {
+  color: var(--color-team-manchester-united);
+}
+
+.team-color-arsenal {
+  color: var(--color-team-arsenal);
+}
+
+.team-color-chelsea {
+  color: var(--color-team-chelsea);
+}
+
+.team-color-liverpool {
+  color: var(--color-team-liverpool);
+}
+
+.team-color-tottenham {
+  color: var(--color-team-tottenham);
+}
+
+.team-color-real-madrid {
+  color: var(--color-team-real-madrid);
+}
+
+.team-color-barcelona {
+  color: var(--color-team-barcelona);
+}
+
+.team-color-bayern-munich {
+  color: var(--color-team-bayern-munich);
+}
+
+.team-color-psg {
+  color: var(--color-team-psg);
+}
+
+/* Status color utilities */
+.status-success {
+  color: var(--color-success-text);
+  background-color: var(--color-success-light);
+}
+
+.status-warning {
+  color: var(--color-warning-text);
+  background-color: var(--color-warning-light);
+}
+
+.status-error {
+  color: var(--color-error-text);
+  background-color: var(--color-error-light);
+}
+
+.status-info {
+  color: var(--color-info-text);
+  background-color: var(--color-info-light);
+}
+
+.status-live {
+  color: var(--color-live-text);
+  background-color: var(--color-live-light);
+}
+
+/* Focus styles for accessibility */
+.focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

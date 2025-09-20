@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test App Loading</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f0f0f0; }
+        .log { background: white; padding: 10px; margin: 5px 0; border-left: 4px solid #007acc; }
+        .error { border-left-color: #ff0000; }
+        .success { border-left-color: #00aa00; }
+    </style>
+</head>
+<body>
+    <h1>App Loading Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function addLog(message, type = 'log') {
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            results.appendChild(div);
+        }
+        
+        addLog('Starting tests...');
+        
+        // Test 1: Check if app loads
+        addLog('Test 1: Checking if React app loads...');
+        fetch('http://localhost:5173')
+            .then(response => response.text())
+            .then(html => {
+                if (html.includes('id="root"')) {
+                    addLog('✅ React app HTML structure is correct', 'success');
+                } else {
+                    addLog('❌ React app HTML structure missing', 'error');
+                }
+            })
+            .catch(error => {
+                addLog(`❌ Failed to load React app: ${error.message}`, 'error');
+            });
+        
+        // Test 2: Check API connectivity
+        addLog('Test 2: Checking API connectivity...');
+        fetch('http://localhost:3001/api/fixtures?league=39&season=2025&date=2025-09-20')
+            .then(response => response.json())
+            .then(data => {
+                if (data.response && data.response.length > 0) {
+                    addLog(`✅ API working: ${data.response.length} Premier League fixtures`, 'success');
+                } else {
+                    addLog('❌ API returned no fixtures', 'error');
+                }
+            })
+            .catch(error => {
+                addLog(`❌ API failed: ${error.message}`, 'error');
+            });
+        
+        // Test 3: Check if we can access app state
+        addLog('Test 3: Checking React app state...');
+        setTimeout(() => {
+            // Try to inject a script to check React DevTools
+            const script = document.createElement('script');
+            script.textContent = `
+                // This will run in the context of the React app
+                if (window.React) {
+                    console.log('✅ React is loaded');
+                } else {
+                    console.log('❌ React not found');
+                }
+            `;
+            document.head.appendChild(script);
+            
+            addLog('Check browser console for React status');
+        }, 2000);
+    </script>
+</body>
+</html>
+
