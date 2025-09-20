@@ -10,11 +10,19 @@
     <meta name="theme-color" content="#1f2937" />
     <title>FixtureCast: Predict the Pulse of European Football - WORKING VERSION</title>
     <!-- Build: 2025-09-20-v8-WRANGLER-CONFIG-FIXED -->
-    <script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="/index.css">
-</head>
+    <!-- Performance: preconnects for faster fetch -->
+    <link rel="preconnect" href="https://v3.football.api-sports.io" crossorigin>
+    <link rel="dns-prefetch" href="https://v3.football.api-sports.io">
+    <!-- Preload hero/team logo for faster LCP -->
+    <link rel="preload" as="image" href="/team-logos/default.svg" fetchpriority="high">
+    <!-- Preload critical CSS (tailwind build) and app css -->
+    <link rel="preload" as="style" href="/styles/tailwind.css" />
+    <link rel="stylesheet" href="/styles/tailwind.css" />
+    <link rel="preload" as="style" href="/index.css" />
+    <link rel="stylesheet" href="/index.css">
+  </head>
   <body class="bg-gray-900">
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
