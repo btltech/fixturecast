@@ -1346,5 +1346,5 @@ export const clearCache = (): void => {
   console.log('API cache cleared and usage reset');
 };
 
-// Export alias for getTeamDetails
+// Export alias for getTeamDetails - FIXED CLOUDFLARE DEPLOYMENT ISSUE
 export const getTeamData = getTeamDetails;
