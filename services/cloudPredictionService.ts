@@ -14,9 +14,10 @@ export class CloudPredictionService {
       window.location.hostname.includes('cloudflare')
     );
     
+    // Use client proxy which injects server-side secret
     this.baseUrl = isCloudflare || typeof window === 'undefined' 
-      ? '/api/predictions/store'
-      : `${window.location.origin}/api/predictions/store`;
+      ? '/api/predictions/client'
+      : `${window.location.origin}/api/predictions/client`;
   }
 
   private async makeRequest(method: string, data?: any, params?: Record<string, string>): Promise<any> {
@@ -32,6 +33,7 @@ export class CloudPredictionService {
       method,
       headers: {
         'Content-Type': 'application/json',
+        // Still send a header, but server proxy injects the real secret
         'X-API-Key': this.apiKey,
       },
     };
