@@ -233,6 +233,21 @@ export const storeDailyPrediction = async (match: Match, prediction: Prediction)
     
     localStorage.setItem(DAILY_PREDICTIONS_KEY, JSON.stringify(existingData));
     console.log('✅ Daily prediction stored locally:', newPredictionData);
+
+    // Notify UI listeners that a prediction was stored
+    try {
+      if (typeof window !== 'undefined' && (window as any).dispatchEvent) {
+        (window as any).dispatchEvent(new CustomEvent('fixturecast:prediction-stored', {
+          detail: {
+            matchId: match.id,
+            homeTeam: match.homeTeam,
+            awayTeam: match.awayTeam,
+            league: match.league,
+            source: 'local'
+          }
+        }));
+      }
+    } catch {}
     
     // Store in cloud only if first time (or if not yet stored)
     if (shouldCloudSync) {
@@ -249,6 +264,21 @@ export const storeDailyPrediction = async (match: Match, prediction: Prediction)
           localStorage.setItem(DAILY_PREDICTIONS_KEY, JSON.stringify(updatedData));
         }
         console.log('🔒 Prediction backed up to cloud with integrity hash:', cloudResult.integrityHash);
+
+        // Notify UI listeners that cloud sync completed
+        try {
+          if (typeof window !== 'undefined' && (window as any).dispatchEvent) {
+            (window as any).dispatchEvent(new CustomEvent('fixturecast:prediction-stored', {
+              detail: {
+                matchId: match.id,
+                homeTeam: match.homeTeam,
+                awayTeam: match.awayTeam,
+                league: match.league,
+                source: 'cloud'
+              }
+            }));
+          }
+        } catch {}
       } catch (cloudError) {
         console.warn('Failed to store prediction in cloud (local copy preserved):', cloudError);
       }
