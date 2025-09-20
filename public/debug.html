@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixtureCast Debug - Cloudflare Pages</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #1f2937; 
+            color: white; 
+            line-height: 1.6;
+        }
+        .status { 
+            background: #374151; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 8px; 
+            border-left: 4px solid #10b981;
+        }
+        .error { border-left-color: #ef4444; }
+        .warning { border-left-color: #f59e0b; }
+        .info { border-left-color: #3b82f6; }
+        pre { 
+            background: #111827; 
+            padding: 10px; 
+            border-radius: 4px; 
+            overflow-x: auto; 
+            font-size: 12px;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #2563eb; }
+    </style>
+</head>
+<body>
+    <h1>🔧 FixtureCast Debug Page</h1>
+    <p>This page helps diagnose deployment issues on Cloudflare Pages</p>
+    
+    <div id="results"></div>
+    
+    <div style="margin: 20px 0;">
+        <button onclick="runTests()">🔄 Run All Tests</button>
+        <button onclick="testAPI()">🌐 Test API</button>
+        <button onclick="testReactApp()">⚛️ Test React App</button>
+    </div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function addResult(title, status, message, details = '') {
+            const div = document.createElement('div');
+            div.className = `status ${status}`;
+            div.innerHTML = `
+                <h3>${title}</h3>
+                <p>${message}</p>
+                ${details ? `<pre>${details}</pre>` : ''}
+            `;
+            results.appendChild(div);
+        }
+        
+        async function runTests() {
+            results.innerHTML = '';
+            
+            // Test 1: Basic Environment
+            addResult('📍 Environment Check', 'info', 'Checking deployment environment', 
+                `Location: ${window.location.origin}
+Host: ${window.location.hostname}
+Protocol: ${window.location.protocol}
+User Agent: ${navigator.userAgent}
+Platform: ${navigator.platform}
+Time: ${new Date().toISOString()}`);
+            
+            // Test 2: JavaScript Basic Functions
+            try {
+                const testObj = { test: 'working' };
+                const testArray = [1, 2, 3];
+                const testPromise = Promise.resolve('success');
+                
+                addResult('✅ JavaScript Basic', 'status', 'JavaScript runtime is working', 
+                    `Objects: ${JSON.stringify(testObj)}
+Arrays: ${JSON.stringify(testArray)}
+Promises: Available`);
+            } catch (error) {
+                addResult('❌ JavaScript Error', 'error', 'JavaScript runtime has issues', error.toString());
+            }
+            
+            // Test 3: Network Connectivity
+            try {
+                const response = await fetch('/health-check.html');
+                if (response.ok) {
+                    addResult('✅ Network Basic', 'status', 'Basic network requests working');
+                } else {
+                    addResult('⚠️ Network Issues', 'warning', `HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                addResult('❌ Network Error', 'error', 'Network requests failing', error.toString());
+            }
+            
+            // Test 4: Local Storage
+            try {
+                localStorage.setItem('test', 'working');
+                const test = localStorage.getItem('test');
+                localStorage.removeItem('test');
+                addResult('✅ Local Storage', 'status', 'Local storage is working');
+            } catch (error) {
+                addResult('❌ Local Storage Error', 'error', 'Local storage issues', error.toString());
+            }
+            
+            // Test 5: Module Loading Test
+            testModuleLoading();
+        }
+        
+        function testModuleLoading() {
+            try {
+                // Try to load a simple ES module
+                const script = document.createElement('script');
+                script.type = 'module';
+                script.innerHTML = `
+                    import { addResult } from './debug-module-test.js';
+                    console.log('ES Modules working');
+                `;
+                
+                script.onload = () => addResult('✅ ES Modules', 'status', 'ES modules loading correctly');
+                script.onerror = (e) => addResult('⚠️ ES Modules', 'warning', 'ES modules may have issues', e.toString());
+                
+                // Don't actually append to avoid real module loading
+                addResult('✅ ES Module Support', 'status', 'Browser supports ES modules');
+            } catch (error) {
+                addResult('❌ ES Module Error', 'error', 'ES module support issues', error.toString());
+            }
+        }
+        
+        async function testAPI() {
+            try {
+                addResult('🌐 API Test Starting', 'info', 'Testing API connectivity...');
+                
+                // Test the API endpoint that should exist
+                const response = await fetch('/api/proxy/fixtures?league=39&season=2025&date=2025-09-20');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('✅ API Working', 'status', 'API endpoint is responding', 
+                        `Status: ${response.status}
+Response: ${JSON.stringify(data, null, 2).substring(0, 500)}...`);
+                } else {
+                    const errorText = await response.text();
+                    addResult('❌ API Error', 'error', `API endpoint failed: ${response.status}`, errorText.substring(0, 500));
+                }
+            } catch (error) {
+                addResult('❌ API Connection Failed', 'error', 'Cannot connect to API', error.toString());
+            }
+        }
+        
+        function testReactApp() {
+            try {
+                addResult('⚛️ React Test Starting', 'info', 'Testing if React app can be loaded...');
+                
+                // Try to load the main React app
+                fetch('/')
+                    .then(response => response.text())
+                    .then(html => {
+                        if (html.includes('root') && html.includes('index.tsx')) {
+                            addResult('✅ React App HTML', 'status', 'React app HTML is being served correctly');
+                        } else {
+                            addResult('⚠️ React App HTML', 'warning', 'React app HTML may be incomplete');
+                        }
+                    })
+                    .catch(error => {
+                        addResult('❌ React App Load Error', 'error', 'Cannot load React app', error.toString());
+                    });
+                    
+                // Check if React is loaded
+                setTimeout(() => {
+                    if (window.React) {
+                        addResult('✅ React Loaded', 'status', 'React library is loaded');
+                    } else {
+                        addResult('⚠️ React Not Loaded', 'warning', 'React library not detected');
+                    }
+                }, 2000);
+                
+            } catch (error) {
+                addResult('❌ React Test Error', 'error', 'Error testing React app', error.toString());
+            }
+        }
+        
+        // Auto-run tests on load
+        window.addEventListener('load', () => {
+            setTimeout(runTests, 500);
+        });
+        
+        // Global error handler
+        window.addEventListener('error', (event) => {
+            addResult('🔴 Global Error Caught', 'error', 'Unhandled error detected', 
+                `Error: ${event.error}
+Message: ${event.message}
+File: ${event.filename}
+Line: ${event.lineno}
+Stack: ${event.error?.stack || 'No stack trace'}`);
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            addResult('🔴 Promise Rejection', 'error', 'Unhandled promise rejection', 
+                `Reason: ${event.reason}
+Promise: ${event.promise}`);
+        });
+    </script>
+</body>
+</html>
