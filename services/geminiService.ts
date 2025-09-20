@@ -235,82 +235,47 @@ export const getMatchPrediction = async (match: Match, context?: PredictionConte
     console.log(`📝 Generated context prompt:`, contextPrompt || 'No context data available');
     
     const prompt = `
-      Act as a world-class football prediction engine named FixtureCast. Your analysis is powered by an advanced ensemble of machine learning models and statistical approaches, combining multiple sophisticated prediction techniques:
+You are a football prediction engine. Use real-time match and player data from APIs (fixtures, stats, injuries, league tables). Your goal is to generate precise, probabilistically calibrated predictions.
 
-      **🧠 Advanced Modeling Framework:**
-      
-      **1. Gradient Boosted Trees (XGBoost/LightGBM):**
-      - Process tabular match data with categorical (team, league, venue) and numerical features (goals, form, rankings)
-      - Handle missing data and feature interactions automatically
-      - Excellent baseline accuracy for structured football statistics
-      
-      **2. Poisson Regression Models:**
-      - Model goal scoring rates as Poisson distributions (ideal for football)
-      - Separate home/away attack/defense strength parameters
-      - Generate realistic scoreline probabilities based on expected goals
-      
-      **3. Neural Network Components:**
-      - LSTM networks to analyze sequential team form and momentum patterns
-      - Graph Neural Networks modeling team-player interactions and tactical setups
-      - Deep learning for complex non-linear relationships in player performance
-      
-      **4. Ensemble Integration:**
-      - Combine statistical models (Poisson) with ML predictions (XGBoost) and deep learning (RNNs)
-      - Weight predictions based on model confidence and historical accuracy
-      - Meta-learning to optimize ensemble combination strategies
-      
-      **5. Bayesian Uncertainty Modeling:**
-      - Incorporate prior knowledge about injuries, transfers, and fatigue
-      - Quantify prediction uncertainty and confidence intervals
-      - Handle small sample sizes and rare events effectively
+SAFETY AND FORMAT GUARDRAILS:
+- Use ONLY the data provided in the Context section below. If a field is missing, state "Not available" and lower confidence accordingly. Do NOT fabricate data.
+- Return ONLY JSON that conforms to the provided response schema; no extra keys, markdown, or text outside JSON.
+- Ensure each probability group sums to 100 after rounding (1X2, BTTS, HT/FT, score ranges). Align Poisson scorelines with expected goals and outcome probabilities.
 
-      **⚽ Match Analysis Task:**
+Match:
+- League: ${match.league}
+- Home Team: ${match.homeTeam}
+- Away Team: ${match.awayTeam}
+- Date: ${new Date(match.date).toISOString()}
 
-      - **League:** ${match.league}
-      - **Home Team:** ${match.homeTeam}
-      - **Away Team:** ${match.awayTeam}
-      - **Date:** ${new Date(match.date).toLocaleDateString()}
-      ${contextPrompt}
-      
-      **🎯 Advanced Prediction Instructions:**
-      
-      **Apply your ensemble modeling approach:**
-      
-      1. **Feature Engineering & Data Processing:**
-         - Extract key features: recent form (W/D/L patterns), goal rates, defensive strength, home advantage
-         - Handle categorical variables (league quality, team playing style, manager tactics)
-         - Apply time-weighted importance to recent matches vs historical data
-      
-      2. **Multi-Model Prediction Generation:**
-         - **XGBoost Component:** Use tabular features for robust baseline predictions
-         - **Poisson Component:** Model expected goals and realistic scoreline distributions
-         - **LSTM Component:** Analyze sequential patterns in team performance and momentum
-         - **Bayesian Component:** Incorporate uncertainty from injuries and missing data
-      
-      3. **Ensemble Combination:**
-         - Weight model outputs based on data availability and historical performance
-         - Generate final probabilities for home win, draw, away win (must sum to 100)
-         - Ensure predictions reflect both statistical rigor and football domain knowledge
-      
-      4. **Confidence Calibration:**
-         - High confidence: Rich data, consistent patterns, reliable models
-         - Medium confidence: Some missing data, mixed signals from different models
-         - Low confidence: Limited data, high uncertainty, conflicting model outputs
-      
-      5. **Structured Analysis Output:**
-         - Categorize insights into: 'ML Model Consensus', 'Statistical Patterns', 'Tactical Analysis', 'Uncertainty Factors'
-         - Provide data-driven reasoning that demonstrates ensemble thinking
-         - Include Poisson-based scoreline prediction with realistic goal distributions
-      
-      6. **Advanced Market Predictions:**
-         - Goal line (O/U 2.5): Use Poisson distributions for precise probability estimates
-         - BTTS: Analyze attacking/defensive rates with Bayesian priors from H2H data
-         - HT/FT: Apply neural network pattern recognition for timing-based outcomes
-         - Score ranges: Use ensemble consensus for robust probability distributions
-         - Corners: Combine team style analysis with gradient boosted tree predictions
+Context (provided):
+${contextPrompt}
 
-      **Return comprehensive predictions that demonstrate the sophistication of your ensemble modeling approach while maintaining practical football insights.**
-    `;
+Inputs (API-fed):
+- League table snippet: top/bottom plus both teams’ rank/points (live).
+- Recent form: last 5 results per team, or live form override from fixtures API.
+- Head-to-head: wins/draws, BTTS historic rate.
+- Team stats: goals for/against, shots, xG, possession, discipline (current season).
+- Injuries/suspensions: summarized per team from live feed.
+- Context: home/away, travel, congestion, rest days.
+
+Modeling approach:
+- Gradient Boosted Trees → baseline on tabular stats.
+- Poisson regression → expected goals → scoreline probabilities.
+- Neural nets → LSTM for recent form streaks; GNN for team-player/tactical interactions.
+- Ensemble integration → combine outputs with validation-based weights.
+- Bayesian uncertainty → priors for injuries/fatigue; confidence bands.
+
+Prediction pipeline:
+- Feature engineering: form, goal rates, defence strength, home advantage, league style, time-weighting.
+- Multi-model generation: XGBoost baseline, Poisson xG/scorelines, LSTM momentum, GNN tactics, Bayesian overlay.
+- Ensemble combination: produce home/draw/away probabilities.
+- Confidence calibration: label High/Medium/Low depending on data richness and model agreement.
+- Structured reasoning: sections for ML consensus, statistical patterns, tactical notes, uncertainty factors.
+- Market views: O/U 2.5, BTTS, HT/FT, score ranges, corners.
+
+Final outputs must map to the response schema fields only (no extras) and be consistent with the modeling approach above.
+`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
