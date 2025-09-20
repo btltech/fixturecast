@@ -19,10 +19,10 @@ const CloudIntegrityPanel: React.FC<CloudIntegrityPanelProps> = ({ className = '
 
   const checkCloudStatus = async () => {
     try {
-      // Temporarily disabled to avoid syntax errors
-      // await cloudPredictionService.getAccuracyStats();
-      setCloudStatus('disconnected');
-      // loadCloudStats();
+      // Probe the cloud API; if it responds, mark as connected and load stats
+      await cloudPredictionService.getAccuracyStats();
+      setCloudStatus('connected');
+      await loadCloudStats();
     } catch (error) {
       console.warn('Cloud storage not available:', error);
       setCloudStatus('disconnected');
@@ -36,8 +36,8 @@ const CloudIntegrityPanel: React.FC<CloudIntegrityPanelProps> = ({ className = '
       let totalVerified = 0;
 
       Object.values(dailyPredictions).forEach((predictions: any) => {
-        totalPredictions += predictions.length;
-        totalVerified += predictions.filter((p: any) => p.verified).length;
+        totalPredictions += (predictions as any[]).length;
+        totalVerified += (predictions as any[]).filter((p: any) => p.verified).length;
       });
 
       setLocalStats({ predictions: totalPredictions, verified: totalVerified });
@@ -134,14 +134,13 @@ const CloudIntegrityPanel: React.FC<CloudIntegrityPanelProps> = ({ className = '
                     const dailyData = JSON.parse(localStorage.getItem('fixturecast_daily_predictions') || '{}');
                     let cloudBacked = 0;
                     Object.values(dailyData).forEach((predictions: any) => {
-                      cloudBacked += predictions.filter((p: any) => p.cloudStored).length;
+                      cloudBacked += (predictions as any[]).filter((p: any) => p.cloudStored).length;
                     });
                     return cloudBacked;
                   } catch (error) {
                       console.warn('Failed to load integrity data:', error);
                       return 0;
                   }
-                  return 0;
                 })()}
               </span>
             </div>
