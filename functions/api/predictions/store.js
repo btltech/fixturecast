@@ -17,6 +17,19 @@ export async function onRequest(context) {
     });
   }
 
+  // Health check: /api/predictions/store?health=true
+  try {
+    const url = new URL(request.url);
+    if (url.searchParams.get('health') === 'true') {
+      return new Response(JSON.stringify({
+        ok: true,
+        kvBound: !!env.PREDICTIONS_KV,
+        hasApiKey: !!env.PREDICTION_API_KEY,
+        message: env.PREDICTIONS_KV ? 'KV is bound' : 'KV binding missing: bind PREDICTIONS_KV in Pages → Settings → Functions'
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+  } catch {}
+
   // Validate API key for security
   const apiKey = request.headers.get('X-API-Key');
   const validApiKey = env.PREDICTION_API_KEY || 'fixturecast_secure_key_2024';
@@ -29,6 +42,16 @@ export async function onRequest(context) {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
+  }
+
+  // Guard: ensure KV is bound
+  if (!env.PREDICTIONS_KV) {
+    return new Response(JSON.stringify({
+      error: 'KV binding missing',
+      message: 'Bind KV namespace as PREDICTIONS_KV in Cloudflare Pages → Settings → Functions',
+      howTo: 'Create KV namespace (Workers & Pages → KV), then bind it with variable name PREDICTIONS_KV',
+      doc: '/CLOUDFLARE_PREDICTION_SETUP.md'
+    }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
   try {
