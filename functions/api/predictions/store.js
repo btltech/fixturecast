@@ -9,6 +9,17 @@ export async function onRequest(context) {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
   };
 
+  // Helper: resolve KV binding (supports fallback if variable name differs)
+  const resolveKv = (envObj) => {
+    if (envObj.PREDICTIONS_KV) return { kv: envObj.PREDICTIONS_KV, name: 'PREDICTIONS_KV' };
+    for (const [key, value] of Object.entries(envObj)) {
+      if (value && typeof value.get === 'function' && typeof value.put === 'function') {
+        return { kv: value, name: key };
+      }
+    }
+    return { kv: null, name: null };
+  };
+
   // Handle preflight requests
   if (request.method === 'OPTIONS') {
     return new Response(null, { 
@@ -21,18 +32,22 @@ export async function onRequest(context) {
   try {
     const url = new URL(request.url);
     if (url.searchParams.get('health') === 'true') {
+      const { kv, name } = resolveKv(env);
+      const hasDirectApiKey = !!env.PREDICTION_API_KEY;
+      const hasViteApiKey = !!env.VITE_PREDICTION_API_KEY;
       return new Response(JSON.stringify({
         ok: true,
-        kvBound: !!env.PREDICTIONS_KV,
-        hasApiKey: !!env.PREDICTION_API_KEY,
-        message: env.PREDICTIONS_KV ? 'KV is bound' : 'KV binding missing: bind PREDICTIONS_KV in Pages → Settings → Functions'
+        kvBound: !!kv,
+        kvVarName: name,
+        hasApiKey: hasDirectApiKey || hasViteApiKey,
+        message: kv ? `KV is bound via ${name}` : 'KV binding missing: bind PREDICTIONS_KV in Pages → Settings → Functions'
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
   } catch {}
 
-  // Validate API key for security
+  // Validate API key for security (accept VITE_PREDICTION_API_KEY too)
   const apiKey = request.headers.get('X-API-Key');
-  const validApiKey = env.PREDICTION_API_KEY || 'fixturecast_secure_key_2024';
+  const validApiKey = env.PREDICTION_API_KEY || env.VITE_PREDICTION_API_KEY || 'fixturecast_secure_key_2024';
   
   if (apiKey !== validApiKey) {
     return new Response(JSON.stringify({ 
@@ -44,8 +59,9 @@ export async function onRequest(context) {
     });
   }
 
-  // Guard: ensure KV is bound
-  if (!env.PREDICTIONS_KV) {
+  // Guard: ensure KV is bound (with auto-detection)
+  const { kv } = resolveKv(env);
+  if (!kv) {
     return new Response(JSON.stringify({
       error: 'KV binding missing',
       message: 'Bind KV namespace as PREDICTIONS_KV in Cloudflare Pages → Settings → Functions',
@@ -60,13 +76,13 @@ export async function onRequest(context) {
 
     switch (request.method) {
       case 'POST':
-        return await handleStorePrediction(request, env, corsHeaders);
+        return await handleStorePrediction(request, kv, corsHeaders);
       
       case 'PUT':
-        return await handleVerifyPrediction(request, env, corsHeaders);
+        return await handleVerifyPrediction(request, kv, corsHeaders);
       
       case 'GET':
-        return await handleRetrievePredictions(request, env, corsHeaders);
+        return await handleRetrievePredictions(request, kv, corsHeaders);
       
       default:
         return new Response(JSON.stringify({ 
@@ -89,7 +105,7 @@ export async function onRequest(context) {
 }
 
 // Store new prediction
-async function handleStorePrediction(request, env, corsHeaders) {
+async function handleStorePrediction(request, kv, corsHeaders) {
   const data = await request.json();
   
   // Validate required fields
@@ -121,7 +137,7 @@ async function handleStorePrediction(request, env, corsHeaders) {
 
   // Store in Cloudflare KV
   const kvKey = `prediction:${data.matchId}`;
-  await env.PREDICTIONS_KV.put(kvKey, JSON.stringify(predictionRecord), {
+  await kv.put(kvKey, JSON.stringify(predictionRecord), {
     metadata: {
       matchDate: data.matchDate,
       league: data.league,
@@ -135,7 +151,7 @@ async function handleStorePrediction(request, env, corsHeaders) {
   
   let dailyIndex = [];
   try {
-    const existing = await env.PREDICTIONS_KV.get(dailyIndexKey);
+    const existing = await kv.get(dailyIndexKey);
     if (existing) {
       dailyIndex = JSON.parse(existing);
     }
@@ -149,7 +165,7 @@ async function handleStorePrediction(request, env, corsHeaders) {
     league: data.league
   });
   
-  await env.PREDICTIONS_KV.put(dailyIndexKey, JSON.stringify(dailyIndex));
+  await kv.put(dailyIndexKey, JSON.stringify(dailyIndex));
 
   console.log(`✅ Prediction stored: ${predictionRecord.id} for ${data.homeTeam} vs ${data.awayTeam}`);
 
@@ -165,7 +181,7 @@ async function handleStorePrediction(request, env, corsHeaders) {
 }
 
 // Verify prediction with actual result
-async function handleVerifyPrediction(request, env, corsHeaders) {
+async function handleVerifyPrediction(request, kv, corsHeaders) {
   const data = await request.json();
   
   if (!data.matchId || !data.actualResult) {
@@ -180,7 +196,7 @@ async function handleVerifyPrediction(request, env, corsHeaders) {
 
   // Retrieve original prediction
   const kvKey = `prediction:${data.matchId}`;
-  const predictionData = await env.PREDICTIONS_KV.get(kvKey);
+  const predictionData = await kv.get(kvKey);
   
   if (!predictionData) {
     return new Response(JSON.stringify({ 
@@ -215,7 +231,7 @@ async function handleVerifyPrediction(request, env, corsHeaders) {
   prediction.verificationSource = data.source || 'api-sports';
 
   // Store updated prediction
-  await env.PREDICTIONS_KV.put(kvKey, JSON.stringify(prediction));
+  await kv.put(kvKey, JSON.stringify(prediction));
 
   // Store in accuracy index for fast retrieval
   const accuracyKey = `accuracy:${prediction.id}`;
@@ -232,7 +248,7 @@ async function handleVerifyPrediction(request, env, corsHeaders) {
     verifiedAt: prediction.verifiedAt
   };
   
-  await env.PREDICTIONS_KV.put(accuracyKey, JSON.stringify(accuracyRecord));
+  await kv.put(accuracyKey, JSON.stringify(accuracyRecord));
 
   console.log(`✅ Prediction verified: ${prediction.id} - Outcome: ${accuracy.outcome ? 'Correct' : 'Incorrect'}`);
 
@@ -248,7 +264,7 @@ async function handleVerifyPrediction(request, env, corsHeaders) {
 }
 
 // Retrieve predictions
-async function handleRetrievePredictions(request, env, corsHeaders) {
+async function handleRetrievePredictions(request, kv, corsHeaders) {
   const url = new URL(request.url);
   const matchId = url.searchParams.get('matchId');
   const date = url.searchParams.get('date');
@@ -257,7 +273,7 @@ async function handleRetrievePredictions(request, env, corsHeaders) {
   if (matchId) {
     // Get specific prediction
     const kvKey = `prediction:${matchId}`;
-    const predictionData = await env.PREDICTIONS_KV.get(kvKey);
+    const predictionData = await kv.get(kvKey);
     
     if (!predictionData) {
       return new Response(JSON.stringify({ 
@@ -277,7 +293,7 @@ async function handleRetrievePredictions(request, env, corsHeaders) {
   if (date) {
     // Get predictions for specific date
     const dailyIndexKey = `daily:${date}`;
-    const dailyIndex = await env.PREDICTIONS_KV.get(dailyIndexKey);
+    const dailyIndex = await kv.get(dailyIndexKey);
     
     if (!dailyIndex) {
       return new Response(JSON.stringify({ 
@@ -294,7 +310,7 @@ async function handleRetrievePredictions(request, env, corsHeaders) {
     
     for (const item of indexData) {
       const kvKey = `prediction:${item.matchId}`;
-      const predictionData = await env.PREDICTIONS_KV.get(kvKey);
+      const predictionData = await kv.get(kvKey);
       if (predictionData) {
         predictions.push(JSON.parse(predictionData));
       }
@@ -312,7 +328,7 @@ async function handleRetrievePredictions(request, env, corsHeaders) {
 
   if (stats) {
     // Get accuracy statistics
-    const accuracyStats = await calculateAccuracyStats(env);
+    const accuracyStats = await calculateAccuracyStats();
     
     return new Response(JSON.stringify(accuracyStats), {
       status: 200,
@@ -379,7 +395,7 @@ function calculatePredictionAccuracy(prediction, actualResult) {
   };
 }
 
-async function calculateAccuracyStats(env) {
+async function calculateAccuracyStats() {
   // This would need to iterate through accuracy records
   // For now, return basic structure
   return {
