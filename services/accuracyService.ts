@@ -194,7 +194,9 @@ export const storeDailyPrediction = async (match: Match, prediction: Prediction)
     
     // Check if prediction already exists for this match
     const existingIndex = existingData[today].findIndex(p => p.matchId === match.id);
-    const predictionData = {
+
+    // Build new prediction payload
+    const newPredictionData = {
       matchId: match.id,
       homeTeam: match.homeTeam,
       awayTeam: match.awayTeam,
@@ -204,42 +206,52 @@ export const storeDailyPrediction = async (match: Match, prediction: Prediction)
       predictionTime: new Date().toISOString(),
       verified: false,
       cloudStored: false
-    };
+    } as any;
     
+    let shouldCloudSync = true;
+
     if (existingIndex >= 0) {
-      existingData[today][existingIndex] = predictionData;
+      // Preserve existing cloud fields and only update the prediction content/time
+      const existing = existingData[today][existingIndex];
+      newPredictionData.cloudStored = !!existing.cloudStored;
+      newPredictionData.cloudPredictionId = existing.cloudPredictionId;
+      newPredictionData.integrityHash = existing.integrityHash;
+      
+      // Update local record
+      existingData[today][existingIndex] = {
+        ...existing,
+        ...newPredictionData
+      };
+
+      // One-per-game cloud sync: only sync on first creation
+      shouldCloudSync = !existing.cloudStored;
     } else {
-      existingData[today].push(predictionData);
+      // First record for this match today
+      existingData[today].push(newPredictionData);
+      shouldCloudSync = true; // First prediction should sync to cloud
     }
     
     localStorage.setItem(DAILY_PREDICTIONS_KEY, JSON.stringify(existingData));
-    console.log('✅ Daily prediction stored locally:', predictionData);
+    console.log('✅ Daily prediction stored locally:', newPredictionData);
     
-    // Store in cloud (async, non-blocking)
-    try {
-      const cloudResult = await cloudPredictionService.storePrediction(match, prediction);
-      
-      // Update local record with cloud confirmation
-      predictionData.cloudStored = true;
-      predictionData.cloudPredictionId = cloudResult.predictionId;
-      predictionData.integrityHash = cloudResult.integrityHash;
-      
-      if (existingIndex >= 0) {
-        existingData[today][existingIndex] = predictionData;
-      } else {
-        // Find and update the record we just added
-        const newIndex = existingData[today].findIndex(p => p.matchId === match.id);
-        if (newIndex >= 0) {
-          existingData[today][newIndex] = predictionData;
+    // Store in cloud only if first time (or if not yet stored)
+    if (shouldCloudSync) {
+      try {
+        const cloudResult = await cloudPredictionService.storePrediction(match, prediction);
+        
+        // Update local record with cloud confirmation
+        const updatedData = getDailyPredictions();
+        const idx = updatedData[today].findIndex((p: any) => p.matchId === match.id);
+        if (idx >= 0) {
+          updatedData[today][idx].cloudStored = true;
+          updatedData[today][idx].cloudPredictionId = cloudResult.predictionId;
+          updatedData[today][idx].integrityHash = cloudResult.integrityHash;
+          localStorage.setItem(DAILY_PREDICTIONS_KEY, JSON.stringify(updatedData));
         }
+        console.log('🔒 Prediction backed up to cloud with integrity hash:', cloudResult.integrityHash);
+      } catch (cloudError) {
+        console.warn('Failed to store prediction in cloud (local copy preserved):', cloudError);
       }
-      
-      localStorage.setItem(DAILY_PREDICTIONS_KEY, JSON.stringify(existingData));
-      console.log('🔒 Prediction backed up to cloud with integrity hash:', cloudResult.integrityHash);
-      
-    } catch (cloudError) {
-      console.warn('Failed to store prediction in cloud (local copy preserved):', cloudError);
-      // Don't throw error - local storage is still successful
     }
     
   } catch (error) {
@@ -296,7 +308,7 @@ export const checkAndUpdateMatchResults = async (matchResults: { id: string; hom
     // Find the prediction for this match
     let matchPrediction = null;
     for (const [date, predictions] of Object.entries(dailyPredictions)) {
-      const prediction = predictions.find((p: any) => p.matchId === result.id);
+      const prediction = (predictions as any[]).find((p: any) => p.matchId === result.id);
       if (prediction) {
         matchPrediction = prediction;
         break;
@@ -331,21 +343,21 @@ export const checkAndUpdateMatchResults = async (matchResults: { id: string; hom
       // Update verification status in daily predictions
       const dailyData = getDailyPredictions();
       for (const [date, predictions] of Object.entries(dailyData)) {
-        const predictionIndex = predictions.findIndex((p: any) => p.matchId === result.id);
+        const predictionIndex = (predictions as any[]).findIndex((p: any) => p.matchId === result.id);
         if (predictionIndex >= 0) {
-          predictions[predictionIndex].verified = true;
-          predictions[predictionIndex].verifiedAt = new Date().toISOString();
-          predictions[predictionIndex].actualResult = { homeScore: result.homeScore, awayScore: result.awayScore };
-          predictions[predictionIndex].accuracy = accuracy;
+          (predictions as any[])[predictionIndex].verified = true;
+          (predictions as any[])[predictionIndex].verifiedAt = new Date().toISOString();
+          (predictions as any[])[predictionIndex].actualResult = { homeScore: result.homeScore, awayScore: result.awayScore };
+          (predictions as any[])[predictionIndex].accuracy = accuracy;
           
           // Try to verify in cloud if it was stored there
-          if (predictions[predictionIndex].cloudStored) {
+          if ((predictions as any[])[predictionIndex].cloudStored) {
             try {
               await cloudPredictionService.verifyPrediction(result.id, {
                 homeScore: result.homeScore,
                 awayScore: result.awayScore
               });
-              predictions[predictionIndex].cloudVerified = true;
+              (predictions as any[])[predictionIndex].cloudVerified = true;
               accuracyRecord.cloudVerified = true;
               console.log('🔒 Prediction verified in cloud for enhanced integrity');
             } catch (cloudError) {
