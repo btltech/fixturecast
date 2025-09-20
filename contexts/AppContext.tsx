@@ -80,6 +80,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  try {
     const [appData, setAppData] = useState<AppData>({
         teams: {},
         fixtures: [],
@@ -1223,6 +1224,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  } catch (error) {
+    console.error('🔴 Critical error in AppProvider:', error);
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
+          <p className="text-gray-300 mb-4">Failed to initialize the application</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
+  }
 };
 
 export const useAppContext = (): AppContextType => {

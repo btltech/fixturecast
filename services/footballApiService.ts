@@ -10,23 +10,28 @@ const DIRECT_BASE_URL = 'https://v3.football.api-sports.io';
 const CORS_PROXY_URL = 'https://api.allorigins.win/raw?url=';
 // Enhanced API key detection with production debugging
 const API_KEY = (() => {
-  const viteKey = (import.meta as any).env?.VITE_FOOTBALL_API_KEY;
-  const fallbackKey = (import.meta as any).env?.FOOTBALL_API_KEY;
-  const defaultKey = '89e32953fd6a91a630144cf150bcf151';
-  
-  // Enhanced logging for production debugging
-  console.log('🔑 API Key Environment Check:', {
-    hasViteKey: !!viteKey,
-    hasFallbackKey: !!fallbackKey,
-    isProduction: (import.meta as any).env?.PROD,
-    mode: (import.meta as any).env?.MODE || 'unknown',
-    baseUrl: typeof window !== 'undefined' ? window.location.origin : 'server',
-    deploymentPlatform: typeof window !== 'undefined' && window.location.hostname.includes('vercel') ? 'vercel' :
-                      typeof window !== 'undefined' && window.location.hostname.includes('pages.dev') ? 'cloudflare' :
-                      typeof window !== 'undefined' && window.location.hostname.includes('netlify') ? 'netlify' : 'unknown'
-  });
-  
-  return viteKey || fallbackKey || defaultKey;
+  try {
+    const viteKey = (import.meta as any).env?.VITE_FOOTBALL_API_KEY;
+    const fallbackKey = (import.meta as any).env?.FOOTBALL_API_KEY;
+    const defaultKey = '89e32953fd6a91a630144cf150bcf151';
+    
+    // Enhanced logging for production debugging
+    console.log('🔑 API Key Environment Check:', {
+      hasViteKey: !!viteKey,
+      hasFallbackKey: !!fallbackKey,
+      isProduction: (import.meta as any).env?.PROD,
+      mode: (import.meta as any).env?.MODE || 'unknown',
+      baseUrl: typeof window !== 'undefined' ? window.location.origin : 'server',
+      deploymentPlatform: typeof window !== 'undefined' && window.location.hostname.includes('vercel') ? 'vercel' :
+                        typeof window !== 'undefined' && window.location.hostname.includes('pages.dev') ? 'cloudflare' :
+                        typeof window !== 'undefined' && window.location.hostname.includes('netlify') ? 'netlify' : 'unknown'
+    });
+    
+    return viteKey || fallbackKey || defaultKey;
+  } catch (error) {
+    console.warn('🔑 Error accessing environment variables, using default API key');
+    return '89e32953fd6a91a630144cf150bcf151';
+  }
 })();
 
 // Detect deployment environment
@@ -218,6 +223,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const makeApiRequest = async (endpoint: string, params: Record<string, any> = {}): Promise<any> => {
   console.log(`🌐 Making API request to ${endpoint} with params:`, params);
   if (!API_KEY) {
+    console.error('🔴 API Key not configured');
     throw new Error('API-Football.com key not configured');
   }
 
