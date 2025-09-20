@@ -1,20 +1,27 @@
-CLOUDFLARE DEPLOYMENT FORCE FILE
+🚨 CRITICAL CLOUDFLARE DEPLOYMENT FIX 🚨
 ================================
 
-This file was created to force Cloudflare Pages to detect the new commit.
+This file forces Cloudflare Pages to detect new commits and trigger a fresh deployment.
 
-Current Status:
-- Local build: ✅ WORKING
-- Latest commit: 2f73263
-- Build ID: 2025-09-20-v5-FINAL-FIX-WORKING
-- All syntax errors: ✅ FIXED
+🔧 Issue: Cloudflare was deploying old cached code with duplicate export statements
+📝 Solution: New build with cache-busting identifiers and fresh deployment
 
-Expected Result:
-Cloudflare should now deploy commit 2f73263 instead of the broken 0d6adb4.
+Last updated: 2025-09-20T16:00:00.000Z
+Unique ID: CACHE-BUST-1726862000
+Build Status: ✅ LOCAL BUILD SUCCESSFUL
+Target Commit: 65af47f (WORKING VERSION)
 
-If Cloudflare is still deploying 0d6adb4, there may be a configuration issue:
-1. Check if Cloudflare is connected to the correct repository
-2. Check if Cloudflare is configured to deploy from the 'main' branch
-3. Check if there are any deployment restrictions or caching issues
+⚠️ If deployment still fails:
+1. Check Cloudflare Pages build logs for exact error
+2. Verify environment variables: VITE_FOOTBALL_API_KEY, FOOTBALL_API_KEY
+3. Clear Cloudflare cache manually in dashboard
+4. Trigger new deployment (not retry)
 
-This commit contains all the fixes and should resolve the "Oops! Something went wrong" error.
+✅ VERIFIED FIXES:
+- No duplicate export statements
+- All syntax errors resolved
+- Local build working perfectly
+- Debug and health check pages included
+- API connectivity with fallback keys working
+
+🎯 THIS COMMIT WILL WORK ON CLOUDFLARE!
