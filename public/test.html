@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixtureCast - Environment Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1f2937; color: white; }
+        .test { background: #374151; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .success { border-left: 4px solid #10b981; }
+        .error { border-left: 4px solid #ef4444; }
+        .warning { border-left: 4px solid #f59e0b; }
+    </style>
+</head>
+<body>
+    <h1>🚀 FixtureCast Environment Test</h1>
+    <p>This page tests if the app can initialize properly on Cloudflare Pages</p>
+    
+    <div id="tests"></div>
+    
+    <script type="module">
+        const testsDiv = document.getElementById('tests');
+        
+        function addTest(name, status, message) {
+            const div = document.createElement('div');
+            div.className = `test ${status}`;
+            div.innerHTML = `<strong>${name}:</strong> ${message}`;
+            testsDiv.appendChild(div);
+        }
+        
+        // Test 1: Basic JavaScript execution
+        try {
+            addTest('JavaScript Execution', 'success', 'JavaScript is working properly');
+        } catch (e) {
+            addTest('JavaScript Execution', 'error', `JavaScript error: ${e.message}`);
+        }
+        
+        // Test 2: Environment Variables (simulated)
+        try {
+            const hasViteSupport = typeof import.meta !== 'undefined';
+            addTest('Vite Support', hasViteSupport ? 'success' : 'warning', 
+                   hasViteSupport ? 'import.meta is available' : 'import.meta not available (expected in production build)');
+        } catch (e) {
+            addTest('Vite Support', 'error', `Error checking Vite support: ${e.message}`);
+        }
+        
+        // Test 3: Fetch API
+        try {
+            if (typeof fetch !== 'undefined') {
+                addTest('Fetch API', 'success', 'Fetch API is available');
+            } else {
+                addTest('Fetch API', 'error', 'Fetch API is not available');
+            }
+        } catch (e) {
+            addTest('Fetch API', 'error', `Fetch API error: ${e.message}`);
+        }
+        
+        // Test 4: Local Storage
+        try {
+            localStorage.setItem('test', 'value');
+            localStorage.removeItem('test');
+            addTest('Local Storage', 'success', 'Local Storage is working');
+        } catch (e) {
+            addTest('Local Storage', 'error', `Local Storage error: ${e.message}`);
+        }
+        
+        // Test 5: Console logging
+        try {
+            console.log('FixtureCast Test: Console logging works');
+            addTest('Console Logging', 'success', 'Console logging is working (check browser console)');
+        } catch (e) {
+            addTest('Console Logging', 'error', `Console error: ${e.message}`);
+        }
+        
+        // Test 6: Try loading a simple API request
+        try {
+            fetch('https://jsonplaceholder.typicode.com/posts/1')
+                .then(response => {
+                    if (response.ok) {
+                        addTest('Network Connectivity', 'success', 'External API requests work');
+                    } else {
+                        addTest('Network Connectivity', 'warning', `HTTP ${response.status}: External API accessible but returned error`);
+                    }
+                })
+                .catch(error => {
+                    addTest('Network Connectivity', 'error', `Network error: ${error.message}`);
+                });
+        } catch (e) {
+            addTest('Network Connectivity', 'error', `Network test error: ${e.message}`);
+        }
+        
+        addTest('Page Load', 'success', 'This test page loaded successfully! Your Cloudflare Pages deployment is working.');
+        addTest('Next Step', 'warning', 'If this page works but the main app doesn\'t, the issue is likely in the React app initialization or environment variables.');
+    </script>
+</body>
+</html>

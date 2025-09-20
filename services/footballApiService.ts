@@ -8,29 +8,41 @@ const VERCEL_API_BASE = '/api/proxy'; // Vercel serverless function
 const CLOUDFLARE_API_BASE = '/api/proxy'; // Cloudflare Pages function
 const DIRECT_BASE_URL = 'https://v3.football.api-sports.io';
 const CORS_PROXY_URL = 'https://api.allorigins.win/raw?url=';
-// Enhanced API key detection with production debugging
+// Simplified and robust API key detection
 const API_KEY = (() => {
+  const defaultKey = '89e32953fd6a91a630144cf150bcf151';
+  
   try {
-    const viteKey = (import.meta as any).env?.VITE_FOOTBALL_API_KEY;
-    const fallbackKey = (import.meta as any).env?.FOOTBALL_API_KEY;
-    const defaultKey = '89e32953fd6a91a630144cf150bcf151';
+    // Try to access environment variables safely
+    let viteKey = null;
+    let fallbackKey = null;
     
-    // Enhanced logging for production debugging
-    console.log('🔑 API Key Environment Check:', {
-      hasViteKey: !!viteKey,
-      hasFallbackKey: !!fallbackKey,
-      isProduction: (import.meta as any).env?.PROD,
-      mode: (import.meta as any).env?.MODE || 'unknown',
-      baseUrl: typeof window !== 'undefined' ? window.location.origin : 'server',
-      deploymentPlatform: typeof window !== 'undefined' && window.location.hostname.includes('vercel') ? 'vercel' :
-                        typeof window !== 'undefined' && window.location.hostname.includes('pages.dev') ? 'cloudflare' :
-                        typeof window !== 'undefined' && window.location.hostname.includes('netlify') ? 'netlify' : 'unknown'
+    try {
+      viteKey = (import.meta as any).env?.VITE_FOOTBALL_API_KEY;
+    } catch (e) {
+      console.warn('Could not access VITE_FOOTBALL_API_KEY');
+    }
+    
+    try {
+      fallbackKey = (import.meta as any).env?.FOOTBALL_API_KEY;
+    } catch (e) {
+      console.warn('Could not access FOOTBALL_API_KEY');
+    }
+    
+    const selectedKey = viteKey || fallbackKey || defaultKey;
+    
+    // Simple logging for production debugging
+    console.log('🔑 FixtureCast API Key Status:', {
+      hasCustomKey: !!(viteKey || fallbackKey),
+      usingDefault: !viteKey && !fallbackKey,
+      keyLength: selectedKey?.length || 0,
+      platform: typeof window !== 'undefined' ? window.location.hostname : 'server'
     });
     
-    return viteKey || fallbackKey || defaultKey;
+    return selectedKey;
   } catch (error) {
-    console.warn('🔑 Error accessing environment variables, using default API key');
-    return '89e32953fd6a91a630144cf150bcf151';
+    console.warn('🔑 Environment access failed, using default API key:', error.message);
+    return defaultKey;
   }
 })();
 
