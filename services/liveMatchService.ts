@@ -1,35 +1,9 @@
 import { LiveMatch, LiveMatchUpdate, MatchEvent } from '../types';
 import { resolveTeamName } from './teamDataService';
 import { makeApiRequest } from './footballApiService';
+import { isLeagueAllowed, isTeamAllowed } from './whitelistService';
 
-// HARD-CODED FEATURED LEAGUES + CHAMPIONSHIP ONLY - NO OTHER LEAGUES ALLOWED
-const ALLOWED_LEAGUES = [
-  // UEFA Competitions (International)
-  'UEFA Champions League',
-  'UEFA Europa League',
-  'UEFA Europa Conference League',
-  
-  // Top 5 European Leagues + Championship
-  'Premier League',
-  'La Liga',
-  'Serie A',
-  'Bundesliga',
-  'Ligue 1',
-  'EFL Championship',
-  
-  // Other Major European Leagues (Featured)
-  'Eredivisie',
-  'Primeira Liga',
-  'Scottish Premiership',
-  'Turkish Süper Lig',
-  'Belgian Pro League',
-  
-  // Major International Leagues (Featured)
-  'Liga MX',
-  'Major League Soccer',
-  'Brasileirão Série A',
-  'Argentine Liga Profesional'
-];
+// League allow list moved to whitelistService for single source of truth
 
 export const getLiveMatches = async (): Promise<LiveMatch[]> => {
   try {
@@ -49,18 +23,20 @@ export const getLiveMatches = async (): Promise<LiveMatch[]> => {
                             fixture.fixture.status.short === '1H' ||
                             fixture.fixture.status.short === '2H';
 
-        // Filter for allowed leagues
+        // Strict league and team allow list checks
         const leagueName = fixture.league?.name || '';
-        const isAllowedLeague = ALLOWED_LEAGUES.some(allowed =>
-          allowed.toLowerCase() === leagueName.toLowerCase()
-        );
+        const leagueAllowed = isLeagueAllowed(leagueName);
 
-        // Log unauthorized leagues
-        if (!isAllowedLeague && isLiveStatus) {
-          console.warn(`⚠️ Filtering out live match from unauthorized league: ${leagueName} (${fixture.teams.home.name} vs ${fixture.teams.away.name})`);
+        const homeAllowed = isTeamAllowed(fixture.teams?.home?.name || '');
+        const awayAllowed = isTeamAllowed(fixture.teams?.away?.name || '');
+
+        if (isLiveStatus && (!leagueAllowed || !homeAllowed || !awayAllowed)) {
+          console.warn(
+            `⚠️ Filtering out match. LeagueAllowed=${leagueAllowed} HomeAllowed=${homeAllowed} AwayAllowed=${awayAllowed} :: ${leagueName} - ${fixture.teams?.home?.name} vs ${fixture.teams?.away?.name}`
+          );
         }
 
-        return isLiveStatus && isAllowedLeague;
+        return isLiveStatus && leagueAllowed && homeAllowed && awayAllowed;
       })
       .map((fixture: any) => ({
         id: fixture.fixture.id.toString(),
@@ -92,13 +68,11 @@ export const getLiveMatchById = async (matchId: string): Promise<LiveMatch | nul
   // Additional filtering to ensure only allowed leagues
   const allowedLiveMatches = liveMatches.filter(match => {
     const leagueName = typeof match.league === 'string' ? match.league : match.league?.name || '';
-    const isAllowed = ALLOWED_LEAGUES.some(allowed =>
-      allowed.toLowerCase() === leagueName.toLowerCase()
-    );
-    if (!isAllowed) {
-      console.warn(`⚠️ Filtering out live match by ID from unauthorized league: ${leagueName}`);
+    const allowed = isLeagueAllowed(leagueName) && isTeamAllowed(match.homeTeam) && isTeamAllowed(match.awayTeam);
+    if (!allowed) {
+      console.warn(`⚠️ Filtering out live match by ID due to whitelist policy: ${leagueName} - ${match.homeTeam} vs ${match.awayTeam}`);
     }
-    return isAllowed;
+    return allowed;
   });
   return allowedLiveMatches.find(match => match.id === matchId) || null;
 };
@@ -108,13 +82,11 @@ export const getLiveMatchUpdates = async (matchIds: string[]): Promise<LiveMatch
   // Additional filtering to ensure only allowed leagues
   const allowedLiveMatches = liveMatches.filter(match => {
     const leagueName = typeof match.league === 'string' ? match.league : match.league?.name || '';
-    const isAllowed = ALLOWED_LEAGUES.some(allowed =>
-      allowed.toLowerCase() === leagueName.toLowerCase()
-    );
-    if (!isAllowed) {
-      console.warn(`⚠️ Filtering out live match updates from unauthorized league: ${leagueName}`);
+    const allowed = isLeagueAllowed(leagueName) && isTeamAllowed(match.homeTeam) && isTeamAllowed(match.awayTeam);
+    if (!allowed) {
+      console.warn(`⚠️ Filtering out live match updates due to whitelist policy: ${leagueName} - ${match.homeTeam} vs ${match.awayTeam}`);
     }
-    return isAllowed;
+    return allowed;
   });
 
   return allowedLiveMatches
