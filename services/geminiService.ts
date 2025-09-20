@@ -7,6 +7,9 @@ import { storeDailyPrediction } from './accuracyService';
 // Use environment variable for API key
 const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY;
 let ai: GoogleGenAI | null = null;
+let geminiQueue: Promise<any> = Promise.resolve();
+const GEMINI_RETRY = 2;
+const GEMINI_BACKOFF_MS = 1500;
 
 if (apiKey) {
   ai = new GoogleGenAI({ apiKey });
@@ -277,14 +280,39 @@ Prediction pipeline:
 Final outputs must map to the response schema fields only (no extras) and be consistent with the modeling approach above.
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: predictionSchema,
-      },
-    });
+    // Throttle + retry wrapper
+    const runGemini = async () => {
+      let lastErr: any = null;
+      for (let attempt = 0; attempt <= GEMINI_RETRY; attempt++) {
+        try {
+          const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: predictionSchema,
+            },
+          });
+          return response;
+        } catch (e: any) {
+          lastErr = e;
+          const msg = String(e?.message || e);
+          const retryable = /quota|rate|429|unavailable|timeout/i.test(msg);
+          if (retryable && attempt < GEMINI_RETRY) {
+            const wait = GEMINI_BACKOFF_MS * Math.pow(2, attempt) + Math.floor(Math.random() * 250);
+            console.warn(`⚠️ Gemini retry (${attempt + 1}/${GEMINI_RETRY}) after ${wait}ms: ${msg}`);
+            await delay(wait);
+            continue;
+          }
+          throw e;
+        }
+      }
+      throw lastErr || new Error('Gemini error');
+    };
+
+    // Serialize requests via queue to reduce burstiness
+    geminiQueue = geminiQueue.then(() => runGemini());
+    const response = await geminiQueue;
     
     const jsonText = response.text.trim();
     const predictionData = JSON.parse(jsonText);

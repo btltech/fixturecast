@@ -230,6 +230,8 @@ const CACHE_DURATION = 60 * 60 * 1000; // 1 hour for fixtures and tables with hi
 const TEAM_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours for team data
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF_MS = 1000; // 1s base backoff
 
 // Helper function to make API requests
 export const makeApiRequest = async (endpoint: string, params: Record<string, any> = {}): Promise<any> => {
@@ -287,67 +289,78 @@ export const makeApiRequest = async (endpoint: string, params: Record<string, an
     };
   }
 
-  try {
-    console.log(`🌐 API request: ${endpoint} - ${apiUrl.toString()}`);
-    const response = await fetch(apiUrl.toString(), fetchOptions);
-    console.log(`📡 Response: ${response.status} ${response.statusText}`);
-    if (response.ok) {
-      const data = await response.json();
-      
-      // Check for rate limiting
-      if (data.errors && data.errors.rateLimit) {
-        console.warn(`⚠️ Rate limit hit: ${data.errors.rateLimit}`);
-        // Wait 60 seconds before retrying
-        await new Promise(resolve => setTimeout(resolve, 60000));
-        throw new Error(`Rate limit exceeded: ${data.errors.rateLimit}`);
-      }
-      
-      // Ensure the response is valid
-      if (!data) {
-          console.warn('API returned null/undefined data:', data);
-          throw new Error('API returned null/undefined data');
+  // Retry with exponential backoff on 429 / transient errors
+  let lastError: any = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`🌐 API request (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${endpoint} - ${apiUrl.toString()}`);
+      const response = await fetch(apiUrl.toString(), fetchOptions);
+      console.log(`📡 Response: ${response.status} ${response.statusText}`);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Check for rate limiting signal in payload
+        if (data?.errors?.rateLimit) {
+          throw new Error(`429: ${data.errors.rateLimit}`);
+        }
+
+        if (!data || !Object.prototype.hasOwnProperty.call(data, 'response')) {
+          throw new Error('Invalid API payload');
+        }
+
+        apiCallCount++;
+        console.log(`✅ API call #${apiCallCount}/${MAX_DAILY_CALLS} via ${platform} - ${endpoint}`);
+        cache.set(cacheKey, { data, timestamp: Date.now() });
+        await delay(500); // basic pacing
+        return data;
       }
 
-      if (!data.hasOwnProperty('response')) {
-          console.warn('API returned payload without response property:', {
-            dataKeys: Object.keys(data),
-            dataType: typeof data,
-            dataValue: data
-          });
-          throw new Error('API returned payload without response property');
-      }
-      apiCallCount++;
-      console.log(`✅ API call #${apiCallCount}/${MAX_DAILY_CALLS} via ${platform} - ${endpoint}`);
-      // Silent operation - no individual API call logging
-      cache.set(cacheKey, { data, timestamp: Date.now() });
-      
-      // Add delay to prevent rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      return data;
-    } else {
+      // Non-OK
       const errorText = await response.text();
-      console.error(`🔴 API request failed for ${endpoint}:`, {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText,
-      });
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-    }
-  } catch (err) {
-    console.error('🔴 API request failed:', err);
+      const is429 = response.status === 429 || /rate limit/i.test(errorText);
+      const isTransient = response.status >= 500 && response.status < 600;
+      if ((is429 || isTransient) && attempt < MAX_RETRIES) {
+        const retryAfter = Number(response.headers.get('retry-after'));
+        const base = retryAfter ? retryAfter * 1000 : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        const jitter = Math.floor(Math.random() * 250);
+        console.warn(`⚠️ Transient error (${response.status}). Backing off ${base + jitter}ms then retrying...`);
+        await delay(base + jitter);
+        continue;
+      }
 
-    // Provide more specific error messages
-    if (err.message?.includes('fetch')) {
-      console.error('🔴 Network error - check if proxy server is running on http://localhost:3001');
-      throw new Error('Network error: Check if proxy server is running');
-    } else if (err.message?.includes('CORS')) {
-      console.error('🔴 CORS error - API access blocked');
-      throw new Error('CORS error: API access blocked');
-    } else {
-    throw new Error(`API connection failed: ${err.message}`);
+      throw new Error(`API request failed: ${response.status} ${response.statusText} ${errorText}`);
+    } catch (err: any) {
+      lastError = err;
+      const msg = String(err?.message || err);
+      const isRateLimited = /429|rate limit|quota/i.test(msg);
+      const isNetwork = /fetch|network|ECONN|ETIMEDOUT/i.test(msg);
+      const shouldRetry = (isRateLimited || isNetwork) && attempt < MAX_RETRIES;
+      if (shouldRetry) {
+        const base = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        const jitter = Math.floor(Math.random() * 300);
+        console.warn(`⚠️ Retryable error: ${msg}. Waiting ${base + jitter}ms (attempt ${attempt + 1})...`);
+        await delay(base + jitter);
+        continue;
+      }
+
+      // Final failure: serve stale cache if available
+      if (cached) {
+        console.warn(`🟡 Returning STALE cache for ${endpoint} due to error: ${msg}`);
+        return cached.data;
+      }
+
+      // No cache to fall back to
+      console.error('🔴 API request failed (no cache fallback):', msg);
+      // Map common errors to clearer messages
+      if (/CORS/i.test(msg)) throw new Error('CORS error: API access blocked');
+      if (isNetwork) throw new Error('Network error: Check connectivity or proxy');
+      throw new Error(`API connection failed: ${msg}`);
     }
   }
+
+  // Should not reach here, but throw last error if it does
+  throw lastError || new Error('Unknown API error');
 };
 
 // Resolve a League enum value to its numeric API league ID
