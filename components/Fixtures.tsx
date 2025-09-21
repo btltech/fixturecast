@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Match, League, Prediction, View } from '../types';
+import { isSameLondonDay } from '../utils/timezone';
 import MatchCard from './MatchCard';
 import { useAppContext } from '../contexts/AppContext';
 import MatchCardSkeleton from './MatchCardSkeleton';
@@ -100,13 +101,8 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
     const excluded = new Set<League>([]);
     let base = fixtures.filter(m => !excluded.has(m.league));
     if (todayOnly) {
-      // Use the correct current date: September 20, 2025
-      const todayStr = '2025-09-20';
-      base = base.filter(m => {
-        const d = new Date(m.date);
-        const ds = d.toISOString().split('T')[0];
-        return ds === todayStr;
-      });
+      const now = new Date();
+      base = base.filter(m => isSameLondonDay(new Date(m.date), now));
     }
     
     if (selectedLeague === 'all') {
@@ -154,7 +150,6 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
   // Group matches by league - ONLY SHOW LEAGUES WITH TODAY'S GAMES, prioritize by league importance
   const groupedMatches = useMemo(() => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
     
     // Define featured leagues with priority (most important first)
     const FEATURED_LEAGUES_PRIORITY = [
@@ -188,9 +183,7 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
 
     filteredMatches.forEach(match => {
       const matchDate = new Date(match.date);
-      matchDate.setHours(0, 0, 0, 0);
-      
-      if (matchDate.getTime() === today.getTime()) {
+      if (isSameLondonDay(matchDate, today)) {
         todaysMatches.push(match);
       }
     });

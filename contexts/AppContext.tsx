@@ -1,4 +1,5 @@
 import React, { createContext, useState, useCallback, useMemo, useContext, ReactNode, useEffect, useRef } from 'react';
+import { nowLondonDateString } from '../utils/timezone';
 import { Match, Prediction, Toast as ToastType, Alert, PastPrediction, Team, LeagueTableRow, League, AppData, AlertType, PredictionAccuracy, AccuracyStats, LiveMatch, LiveMatchUpdate } from '../types';
 import { getMatchPrediction } from '../services/geminiService';
 import { buildContextForMatch } from '../utils/contextUtils';
@@ -358,7 +359,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         }
 
                         // Fetch comprehensive team details
-                        const { getTeamData: fetchTeamDetails } = await import('../services/footballApiService');
+                        const { getTeamDetails: fetchTeamDetails } = await import('../services/footballApiService');
                         const teamDetails = await fetchTeamDetails(teamName);
 
                         if (teamDetails) {
@@ -883,7 +884,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updateDailyPredictions = useCallback(async () => {
         try {
             // Prevent multiple runs within the same day
-            const todayKey = new Date().toISOString().slice(0, 10);
+            const todayKey = nowLondonDateString();
             const lastRun = hasLocalStorage ? window.localStorage.getItem('fixturecast_last_prediction_refresh') : null;
             if (lastRun === todayKey) return;
 
@@ -1128,7 +1129,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // Fetch from API
             // Fetching team data
             try {
-                const { getTeamData: fetchTeamDetails } = await import('../services/footballApiService');
+                const { getTeamDetails: fetchTeamDetails } = await import('../services/footballApiService');
                 const teamData = await fetchTeamDetails(teamName);
 
                 if (teamData) {
@@ -1166,7 +1167,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         refreshTeamDetails: async (teamName: string) => {
             // Manual refresh - force refresh by setting forceRefresh to true
             try {
-                const { getTeamData: fetchTeamDetails } = await import('../services/footballApiService');
+                const { getTeamDetails: fetchTeamDetails } = await import('../services/footballApiService');
                 const teamData = await fetchTeamDetails(teamName);
                 return teamData;
             } catch (error) {
@@ -1184,7 +1185,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             for (const teamName of teamNames) {
                 try {
-                    const { getTeamData: fetchTeamDetails } = await import('../services/footballApiService');
+                    const { getTeamDetails: fetchTeamDetails } = await import('../services/footballApiService');
                     const result = await fetchTeamDetails(teamName);
                     if (result) {
                         successCount++;

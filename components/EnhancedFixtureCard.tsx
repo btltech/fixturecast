@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Match, League, Team } from '../types';
+import { LONDON_TIMEZONE } from '../utils/timezone';
 import { getHomeTeamName, getAwayTeamName, getMatchLeagueName } from '../utils/matchUtils';
 import TeamLogo from './TeamLogo';
 import LeagueLogo from './LeagueLogo';
@@ -42,10 +43,11 @@ const EnhancedFixtureCard: React.FC<EnhancedFixtureCardProps> = ({
 
   // Format time for display
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
+    return date.toLocaleTimeString('en-GB', {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true
+      hour12: false,
+      timeZone: LONDON_TIMEZONE
     });
   };
 
@@ -60,7 +62,7 @@ const EnhancedFixtureCard: React.FC<EnhancedFixtureCardProps> = ({
     } else if (date.toDateString() === tomorrow.toDateString()) {
       return 'Tomorrow';
     } else {
-      return date.toLocaleDateString('en-US', {
+      return date.toLocaleDateString('en-GB', {
         weekday: 'short',
         month: 'short',
         day: 'numeric'

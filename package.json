@@ -10,6 +10,7 @@
     "build": "vite build --mode production",
     "build:prod": "vite build --mode production --force",
     "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",

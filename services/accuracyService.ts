@@ -158,6 +158,50 @@ export const formatAccuracyDisplay = (stats: AccuracyStats): string => {
   return `Last 10: ${recent}% | Overall: ${overall}% (${stats.correctOutcomes}/${total})`;
 };
 
+// ---- Calibration helpers ----
+
+const safeProb = (p: number): number => {
+  const x = Math.max(0, Math.min(100, p));
+  return x / 100; // convert 0-100 → 0-1
+};
+
+const outcomeOneHot = (outcome: 'home' | 'draw' | 'away'): [number, number, number] => (
+  outcome === 'home' ? [1,0,0] : outcome === 'draw' ? [0,1,0] : [0,0,1]
+);
+
+export const computeCalibrationMetrics = (
+  prediction: Prediction,
+  actual: { homeScore: number; awayScore: number }
+) => {
+  const outcome: 'home' | 'draw' | 'away' = actual.homeScore > actual.awayScore ? 'home' : actual.homeScore < actual.awayScore ? 'away' : 'draw';
+  const ph = safeProb(prediction.homeWinProbability);
+  const pd = safeProb(prediction.drawProbability);
+  const pa = safeProb(prediction.awayWinProbability);
+  const [yh, yd, ya] = outcomeOneHot(outcome);
+
+  // Multi-class Brier score
+  const brier = ((ph - yh) ** 2 + (pd - yd) ** 2 + (pa - ya) ** 2) / 3;
+
+  // Log loss (clip to avoid -inf)
+  const eps = 1e-9;
+  const pActual = outcome === 'home' ? ph : outcome === 'draw' ? pd : pa;
+  const logLoss = -Math.log(Math.max(eps, pActual));
+
+  // Agreement margin
+  const arr = [ph, pd, pa].sort((a, b) => b - a);
+  const topProbability = arr[0];
+  const topMargin = arr[0] - arr[1];
+
+  return {
+    brierScore: brier,
+    logLoss,
+    predicted: { home: ph, draw: pd, away: pa },
+    actualOutcome: outcome,
+    topProbability,
+    topMargin,
+  };
+};
+
 // Store prediction accuracy data persistently
 export const storeAccuracyData = (accuracyRecord: PredictionAccuracy): void => {
   try {
@@ -352,7 +396,11 @@ export const checkAndUpdateMatchResults = async (matchResults: { id: string; hom
         { homeScore: result.homeScore, awayScore: result.awayScore }
       );
       
-      // Store accuracy record
+      // Store accuracy record with calibration
+      const calibration = computeCalibrationMetrics(
+        matchPrediction.prediction,
+        { homeScore: result.homeScore, awayScore: result.awayScore }
+      );
       const accuracyRecord: PredictionAccuracy = {
         id: `${result.id}-${Date.now()}`,
         matchId: result.id,
@@ -364,6 +412,7 @@ export const checkAndUpdateMatchResults = async (matchResults: { id: string; hom
         prediction: matchPrediction.prediction,
         actualResult: { homeScore: result.homeScore, awayScore: result.awayScore },
         accuracy,
+        calibration,
         verifiedAt: new Date().toISOString(),
         cloudVerified: false
       };

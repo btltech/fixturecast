@@ -4,7 +4,9 @@ import TeamLogo from './TeamLogo';
 import AlertCard from './AlertCard';
 import PerformanceTracker from './PerformanceTracker';
 import { useAppContext } from '../contexts/AppContext';
-import { AlertType, View } from '../types';
+import { AlertType, View, Match, Prediction, League } from '../types';
+import { onDemandPredictionService } from '../services/onDemandPredictionService';
+import { getTeamInfo, searchTeamsByName, inferCompetitionForTeam } from '../services/footballApiService';
 
 interface MyTeamsProps {
   onSelectTeam?: (teamName: string) => void;
@@ -46,6 +48,107 @@ const MyTeams: React.FC<MyTeamsProps> = ({ onSelectTeam, onNavigate }) => {
             });
         } else {
             addToast("Please favorite a team to simulate an alert.", "warning");
+        }
+    };
+
+    // On-demand prediction UI state
+    const [homeTeam, setHomeTeam] = useState<string>('');
+    const [awayTeam, setAwayTeam] = useState<string>('');
+    const [leagueIdInput, setLeagueIdInput] = useState<string>('');
+    const [seasonInput, setSeasonInput] = useState<string>('');
+    const [isGenerating, setIsGenerating] = useState<boolean>(false);
+    const [prediction, setPrediction] = useState<Prediction | null>(null);
+    const [predictError, setPredictError] = useState<string | null>(null);
+
+    // Autocomplete + inference state
+    const [homeSuggestions, setHomeSuggestions] = useState<Array<{ teamId: number; name: string }>>([]);
+    const [awaySuggestions, setAwaySuggestions] = useState<Array<{ teamId: number; name: string }>>([]);
+    const [homeTeamId, setHomeTeamId] = useState<number | null>(null);
+    const [awayTeamId, setAwayTeamId] = useState<number | null>(null);
+    const [inferredLeague, setInferredLeague] = useState<{ leagueId: number; season: number } | null>(null);
+
+    const swapTeams = () => {
+        setPrediction(null);
+        setPredictError(null);
+        const h = homeTeam;
+        const a = awayTeam;
+        setHomeTeam(a);
+        setAwayTeam(h);
+    };
+
+    const coerceLeague = (maybe: any): League => {
+        const values = Object.values(League) as string[];
+        if (maybe && values.includes(String(maybe))) {
+            return maybe as League;
+        }
+        return League.PremierLeague;
+    };
+
+    const handleGeneratePrediction = async () => {
+        setPrediction(null);
+        setPredictError(null);
+        if (!homeTeam || !awayTeam) {
+            setPredictError('Select both teams.');
+            return;
+        }
+        if (homeTeam === awayTeam) {
+            setPredictError('Teams must be different.');
+            return;
+        }
+        try {
+            setIsGenerating(true);
+
+            // Resolve team details/IDs (prefer context, fallback to API)
+            const homeCtx = teams[homeTeam];
+            const awayCtx = teams[awayTeam];
+
+            const [homeApi, awayApi] = await Promise.all([
+                homeCtx?.id ? Promise.resolve(homeCtx) : getTeamInfo(homeTeam),
+                awayCtx?.id ? Promise.resolve(awayCtx) : getTeamInfo(awayTeam)
+            ]);
+
+            const homeId = Number(homeTeamId || homeApi?.id || homeCtx?.id || 0);
+            const awayId = Number(awayTeamId || awayApi?.id || awayCtx?.id || 0);
+
+            // Derive league preference from home team if available
+            const league: League = coerceLeague(homeApi?.league || homeCtx?.league || awayApi?.league || awayCtx?.league || League.PremierLeague);
+
+            const match: Match = {
+                id: `custom-${Date.now()}`,
+                homeTeam: homeTeam,
+                awayTeam: awayTeam,
+                homeTeamId: homeId,
+                awayTeamId: awayId,
+                league,
+                date: new Date().toISOString(),
+                venue: undefined,
+                status: 'NS',
+                homeScore: 0,
+                awayScore: 0,
+            };
+
+            // Prefer auto-inferred competition identifiers
+            let leagueIdToUse: number | undefined;
+            let seasonToUse: number | undefined;
+            if (inferredLeague?.leagueId && inferredLeague?.season) {
+                leagueIdToUse = inferredLeague.leagueId;
+                seasonToUse = inferredLeague.season;
+            } else if (homeId) {
+                const inf = await inferCompetitionForTeam(homeId);
+                if (inf?.leagueId) {
+                    leagueIdToUse = inf.leagueId;
+                    seasonToUse = inf.season;
+                }
+            }
+            if (leagueIdToUse) (match as any).leagueId = leagueIdToUse;
+            if (seasonToUse) (match as any).season = seasonToUse;
+
+            const generated = await onDemandPredictionService.generateMatchPrediction(match);
+            setPrediction(generated);
+        } catch (e: any) {
+            setPredictError(e?.message || 'Failed to generate prediction.');
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -160,6 +263,165 @@ const MyTeams: React.FC<MyTeamsProps> = ({ onSelectTeam, onNavigate }) => {
                         <div className="text-center text-gray-400 py-8">
                             <p>You have no notifications.</p>
                             <p className="text-sm">Favorite a team to start receiving alerts.</p>
+                        </div>
+                    )}
+                </div>
+            </section>
+
+            {/* On-Demand Prediction Panel */}
+            <section>
+                <h2 className="text-3xl font-bold tracking-tight text-white mb-4">On-Demand Prediction</h2>
+                <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-2">Team A (Home)</label>
+                            <input
+                                list="home-team-options"
+                                value={homeTeam}
+                                onChange={async (e) => {
+                                    const value = e.target.value;
+                                    setHomeTeam(value);
+                                    setPrediction(null);
+                                    setPredictError(null);
+                                    setHomeTeamId(null);
+                                    setInferredLeague(null);
+                                    if (value && value.length >= 2) {
+                                        const results = await searchTeamsByName(value);
+                                        setHomeSuggestions(results.map(r => ({ teamId: r.teamId, name: r.name })));
+                                    } else {
+                                        setHomeSuggestions([]);
+                                    }
+                                }}
+                                placeholder="Any club or national team"
+                                className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                aria-label="Select Team A (Home)"
+                                title="Select Team A (Home)"
+                            />
+                            {homeSuggestions.length > 0 && (
+                                <ul className="mt-2 max-h-48 overflow-auto bg-gray-900 border border-gray-700 rounded-md">
+                                    {homeSuggestions.map(s => (
+                                        <li key={s.teamId}>
+                                            <button
+                                                className="w-full text-left px-3 py-2 hover:bg-gray-800 text-sm text-white"
+                                                onClick={async () => {
+                                                    setHomeTeam(s.name);
+                                                    setHomeTeamId(s.teamId);
+                                                    setHomeSuggestions([]);
+                                                    const inf = await inferCompetitionForTeam(s.teamId);
+                                                    if (inf) setInferredLeague({ leagueId: inf.leagueId, season: inf.season });
+                                                }}
+                                            >{s.name}</button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-2">Team B (Away)</label>
+                            <input
+                                list="away-team-options"
+                                value={awayTeam}
+                                onChange={async (e) => {
+                                    const value = e.target.value;
+                                    setAwayTeam(value);
+                                    setPrediction(null);
+                                    setPredictError(null);
+                                    setAwayTeamId(null);
+                                    if (value && value.length >= 2) {
+                                        const results = await searchTeamsByName(value);
+                                        setAwaySuggestions(results.map(r => ({ teamId: r.teamId, name: r.name })));
+                                    } else {
+                                        setAwaySuggestions([]);
+                                    }
+                                }}
+                                placeholder="Any club or national team"
+                                className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                aria-label="Select Team B (Away)"
+                                title="Select Team B (Away)"
+                            />
+                            {awaySuggestions.length > 0 && (
+                                <ul className="mt-2 max-h-48 overflow-auto bg-gray-900 border border-gray-700 rounded-md">
+                                    {awaySuggestions.map(s => (
+                                        <li key={s.teamId}>
+                                            <button
+                                                className="w-full text-left px-3 py-2 hover:bg-gray-800 text-sm text-white"
+                                                onClick={() => {
+                                                    setAwayTeam(s.name);
+                                                    setAwayTeamId(s.teamId);
+                                                    setAwaySuggestions([]);
+                                                }}
+                                            >{s.name}</button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        {/* Manual League/Season inputs removed in favor of inference */}
+                    </div>
+                    <datalist id="home-team-options">
+                        {homeSuggestions.map(s => (
+                            <option key={s.teamId} value={s.name} />
+                        ))}
+                    </datalist>
+                    <datalist id="away-team-options">
+                        {awaySuggestions.map(s => (
+                            <option key={s.teamId} value={s.name} />
+                        ))}
+                    </datalist>
+                    <div className="flex items-center gap-3 mt-4">
+                        <button
+                            onClick={swapTeams}
+                            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm"
+                            disabled={!homeTeam && !awayTeam}
+                        >
+                            Swap Teams
+                        </button>
+                        <button
+                            onClick={handleGeneratePrediction}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-900 text-white px-4 py-2 rounded-lg font-medium text-sm"
+                            disabled={isGenerating || !homeTeam || !awayTeam || homeTeam === awayTeam}
+                        >
+                            {isGenerating ? 'Generating…' : 'Generate Prediction'}
+                        </button>
+                        {predictError && (
+                            <span className="text-red-400 text-sm">{predictError}</span>
+                        )}
+                    </div>
+
+                    {prediction && (
+                        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+                                <div className="text-gray-400 text-xs mb-1">Outcome Probabilities</div>
+                                <div className="text-white text-sm">Home: {prediction.homeWinProbability}%</div>
+                                <div className="text-white text-sm">Draw: {prediction.drawProbability}%</div>
+                                <div className="text-white text-sm">Away: {prediction.awayWinProbability}%</div>
+                                <div className="text-white text-sm mt-2">Predicted Scoreline: {prediction.predictedScoreline}</div>
+                                <div className="text-white text-sm mt-2">Confidence: {prediction.confidence}</div>
+                            </div>
+                            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+                                <div className="text-gray-400 text-xs mb-1">Markets</div>
+                                {prediction.goalLine && (
+                                    <div className="text-white text-sm">Over/Under {prediction.goalLine.line}: {prediction.goalLine.overProbability}% / {prediction.goalLine.underProbability}%</div>
+                                )}
+                                {prediction.btts && (
+                                    <div className="text-white text-sm mt-2">BTTS: Yes {prediction.btts.yesProbability}% / No {prediction.btts.noProbability}%</div>
+                                )}
+                                {prediction.htft && (
+                                    <div className="text-white text-xs mt-2">HT/FT: HH {prediction.htft.homeHome}%, HD {prediction.htft.homeDraw}%, HA {prediction.htft.homeAway}%, DH {prediction.htft.drawHome}%, DD {prediction.htft.drawDraw}%, DA {prediction.htft.drawAway}%, AH {prediction.htft.awayHome}%, AD {prediction.htft.awayDraw}%, AA {prediction.htft.awayAway}%</div>
+                                )}
+                            </div>
+                            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+                                <div className="text-gray-400 text-xs mb-1">Advanced</div>
+                                {prediction.expectedGoals && (
+                                    <div className="text-white text-sm">xG: Home {prediction.expectedGoals.homeXg.toFixed(2)} / Away {prediction.expectedGoals.awayXg.toFixed(2)}</div>
+                                )}
+                                {prediction.uncertaintyMetrics && (
+                                    <div className="text-white text-sm mt-2">Uncertainty: Var {prediction.uncertaintyMetrics.predictionVariance} / Agreement {prediction.uncertaintyMetrics.modelAgreement}%</div>
+                                )}
+                                {prediction.modelWeights && (
+                                    <div className="text-white text-xs mt-2">Ensemble Weights: XGB {prediction.modelWeights.xgboost}%, Poisson {prediction.modelWeights.poisson}%, NN {prediction.modelWeights.neuralNet}%, Bayesian {prediction.modelWeights.bayesian}%</div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>

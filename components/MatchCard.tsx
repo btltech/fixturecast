@@ -24,15 +24,16 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onSelectMatch, onSelectTea
   const awayTeamForm = getTeamForm(2, awayTeam); // Using mock team ID
 
   const matchDate = new Date(date);
-  const dateString = matchDate.toLocaleDateString(undefined, {
+  const dateString = matchDate.toLocaleDateString('en-GB', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
   });
-  const timeString = matchDate.toLocaleTimeString(undefined, {
+  const timeString = matchDate.toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
+    timeZone: 'Europe/London',
   });
 
   const isFavorite = (teamName: string) => favoriteTeams.includes(teamName);

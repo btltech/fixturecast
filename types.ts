@@ -419,6 +419,15 @@ export interface PredictionAccuracy {
     cleanSheet: boolean;    // Clean sheet prediction correct
     corners: boolean;       // Corner prediction correct
   };
+  // Calibration and diagnostics (optional)
+  calibration?: {
+    brierScore?: number;         // Multi-class Brier score for 1X2
+    logLoss?: number;            // Negative log-likelihood for actual outcome
+    predicted?: { home: number; draw: number; away: number }; // Probabilities used (0-1)
+    actualOutcome?: 'home' | 'draw' | 'away';                 // Realized outcome
+    topProbability?: number;     // max of predicted probs (0-1)
+    topMargin?: number;          // margin between top and second (0-1)
+  };
   timestamp: string;
   cloudVerified?: boolean;
   cloudPredictionId?: string;

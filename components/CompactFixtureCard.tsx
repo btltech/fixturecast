@@ -1,4 +1,5 @@
 import React from 'react';
+import { LONDON_TIMEZONE } from '../utils/timezone';
 import { Match, League } from '../types';
 import { colorSystemService } from '../services/colorSystemService';
 import { getHomeTeamName, getAwayTeamName, getMatchLeagueName } from '../utils/matchUtils';
@@ -39,13 +40,14 @@ const CompactFixtureCard: React.FC<CompactFixtureCardProps> = ({
     } else if (diffInHours < 2) {
       return 'LIVE';
     } else if (diffInHours < 24) {
-      return date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
+      return date.toLocaleTimeString('en-GB', { 
+        hour: '2-digit', 
         minute: '2-digit',
-        hour12: true 
+        hour12: false,
+        timeZone: LONDON_TIMEZONE
       });
     } else {
-      return date.toLocaleDateString('en-US', {
+      return date.toLocaleDateString('en-GB', {
         month: 'short',
         day: 'numeric'
       });

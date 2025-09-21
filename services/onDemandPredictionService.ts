@@ -10,6 +10,7 @@ import {
 } from './footballApiService';
 import { storeDailyPrediction } from './accuracyService';
 import { buildContextForMatch } from '../utils/contextUtils';
+import { ConfidenceLevel } from '../types';
 
 /**
  * Service for generating predictions on-demand for individual matches
@@ -59,6 +60,17 @@ export class OnDemandPredictionService {
       
       // Generate prediction with enriched context
       const prediction = await getMatchPrediction(match, context);
+
+      // Confidence calibration overlay based on data richness
+      try {
+        const richness = this.computeDataRichness(matchData);
+        // Set or refine confidence fields
+        const level = richness.level;
+        const reason = richness.reason;
+        (prediction as any).confidence = prediction.confidence || level;
+        (prediction as any).confidenceReason = prediction.confidenceReason || reason;
+        (prediction as any).confidencePercentage = prediction.confidencePercentage ?? Math.min(100, Math.max(0, Math.round(richness.score)));
+      } catch {}
       
       // Store the prediction
       await storeDailyPrediction(match, prediction);
@@ -85,8 +97,34 @@ export class OnDemandPredictionService {
    * Fetch comprehensive data for a match to improve prediction accuracy
    */
   private async fetchMatchData(match: Match) {
-    const leagueId = getLeagueId(match.league);
-    
+    // Allow custom leagueId/season passed from UI for global coverage (clubs and national teams)
+    const customLeagueId = (match as any)?.leagueId as number | undefined;
+    const customSeason = (match as any)?.season as number | undefined;
+
+    const derivedLeagueId = getLeagueId(match.league);
+    const leagueId = customLeagueId ?? derivedLeagueId ?? undefined;
+    const seasonYear = customSeason ?? new Date().getFullYear();
+
+    const homeId = match.homeTeamId;
+    const awayId = match.awayTeamId;
+
+    // Prepare calls with correct parameter types
+    const calls: Array<Promise<any>> = [
+      // League table (best-effort). If we only have a dynamic league, skip table.
+      derivedLeagueId ? getLeagueTable(match.league) : Promise.resolve(null),
+      // H2H expects numeric team IDs
+      getHeadToHead(homeId, awayId),
+      // Team stats require teamId and leagueId
+      leagueId ? getTeamStats(homeId, leagueId) : Promise.resolve(null),
+      leagueId ? getTeamStats(awayId, leagueId) : Promise.resolve(null),
+      // Injuries require teamId and leagueId
+      leagueId ? getInjuries(homeId, leagueId) : Promise.resolve(null),
+      leagueId ? getInjuries(awayId, leagueId) : Promise.resolve(null),
+      // Recent form requires teamId only
+      getRecentTeamForm(homeId),
+      getRecentTeamForm(awayId)
+    ];
+
     // Fetch all data in parallel for faster response
     const [
       leagueTables,
@@ -97,16 +135,7 @@ export class OnDemandPredictionService {
       awayTeamInjuries,
       homeTeamForm,
       awayTeamForm
-    ] = await Promise.allSettled([
-      getLeagueTable(leagueId, new Date().getFullYear()),
-      getHeadToHead(match.homeTeam, match.awayTeam),
-      getTeamStats(match.homeTeam, leagueId, new Date().getFullYear()),
-      getTeamStats(match.awayTeam, leagueId, new Date().getFullYear()),
-      getInjuries(match.homeTeam, leagueId),
-      getInjuries(match.awayTeam, leagueId),
-      getRecentTeamForm(match.homeTeam, leagueId),
-      getRecentTeamForm(match.awayTeam, leagueId)
-    ]);
+    ] = await Promise.allSettled(calls);
 
     // Extract successful results
     const leagueTable = leagueTables.status === 'fulfilled' ? leagueTables.value : null;
@@ -139,6 +168,44 @@ export class OnDemandPredictionService {
       awayTeamInjuries: awayInjuries,
       formOverride
     };
+  }
+
+  private computeDataRichness(matchData: any): { score: number; reason: string; level: ConfidenceLevel } {
+    let score = 0;
+    const reasons: string[] = [];
+
+    const hasHomeStats = !!matchData?.homeTeamStats;
+    const hasAwayStats = !!matchData?.awayTeamStats;
+    const hasStats = hasHomeStats && hasAwayStats;
+    score += hasStats ? 35 : (hasHomeStats || hasAwayStats ? 20 : 5);
+    if (!hasStats) reasons.push('Limited team stats');
+
+    const homeFormLen = (matchData?.formOverride?.homeTeam?.recentForm || []).length;
+    const awayFormLen = (matchData?.formOverride?.awayTeam?.recentForm || []).length;
+    const minForm = Math.min(homeFormLen, awayFormLen);
+    if (minForm >= 5) score += 25; else if (minForm >= 3) score += 15; else score += 5;
+    if (minForm < 5) reasons.push('Sparse recent form');
+
+    const h2hCount = Array.isArray(matchData?.h2hData) ? matchData.h2hData.length : 0;
+    if (h2hCount >= 3) score += 10; else if (h2hCount > 0) score += 6; else score += 2;
+    if (h2hCount === 0) reasons.push('No recent H2H');
+
+    const homeInjuries = Array.isArray(matchData?.homeTeamInjuries) ? matchData.homeTeamInjuries.length : 0;
+    const awayInjuries = Array.isArray(matchData?.awayTeamInjuries) ? matchData.awayTeamInjuries.length : 0;
+    // Presence of injury data (not number) improves context
+    const hasInjuryFeeds = (homeInjuries + awayInjuries) >= 0; // if arrays exist
+    score += hasInjuryFeeds ? 10 : 2;
+    if (!hasInjuryFeeds) reasons.push('Injuries unavailable');
+
+    const hasTable = !!matchData?.leagueTables && Array.isArray(matchData.leagueTables) ? matchData.leagueTables.length > 0 : !!matchData?.leagueTables;
+    score += hasTable ? 10 : 2;
+    if (!hasTable) reasons.push('Standings unavailable');
+
+    // Cap and map to level
+    score = Math.min(100, Math.max(0, score));
+    const level = score >= 70 ? ConfidenceLevel.High : score >= 45 ? ConfidenceLevel.Medium : ConfidenceLevel.Low;
+    const reason = reasons.length ? reasons.join('; ') : 'Rich data coverage';
+    return { score, reason, level };
   }
 }
 

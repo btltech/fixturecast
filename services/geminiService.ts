@@ -238,46 +238,46 @@ export const getMatchPrediction = async (match: Match, context?: PredictionConte
     console.log(`📝 Generated context prompt:`, contextPrompt || 'No context data available');
     
     const prompt = `
-You are a football prediction engine. Use real-time match and player data from APIs (fixtures, stats, injuries, league tables). Your goal is to generate precise, probabilistically calibrated predictions.
+You are a football prediction engine that generates detailed, on-demand predictions for a single, user-selected fixture inside the "My Teams" tab. This must never run automatically.
 
-SAFETY AND FORMAT GUARDRAILS:
-- Use ONLY the data provided in the Context section below. If a field is missing, state "Not available" and lower confidence accordingly. Do NOT fabricate data.
-- Return ONLY JSON that conforms to the provided response schema; no extra keys, markdown, or text outside JSON.
-- Ensure each probability group sums to 100 after rounding (1X2, BTTS, HT/FT, score ranges). Align Poisson scorelines with expected goals and outcome probabilities.
+DATA SOURCE POLICY
+- Use API-Football ONLY for all real-time and historical data (fixtures, teams, standings, stats, H2H, injuries/suspensions, lineups, venues, schedules). Do not use any other data source. Do not infer unavailable data.
+- All timestamps in outputs must map to the API-Football fixture timestamp and season identifiers when available in context. If missing, mark as Not available and degrade confidence.
 
-Match:
+INPUTS (from API-Football)
+- Competition/season identifiers, fixture (home/away, venue), recent form (last 5–10 matches with recency weighting), head-to-head (wins/draws, BTTS), team stats (goals, xG/xGA, shots, possession, discipline, corners), squad status (injuries/suspensions), context (rest days, congestion, travel/time zone, venue/weather if present).
+
+MODELING (Ensemble)
+- GBDT baseline over tabular features; Poisson regression to convert adjusted xG/xGA to expected goals and discrete scoreline probabilities; LSTM for recent form momentum; GNN (or team-level fallback) for lineup/tactical interactions; Bayesian layer to widen uncertainty for injuries/fatigue/travel and sparse national-team history.
+
+FEATURE ENGINEERING
+- Rolling form windows (5–10) with time-decay, opponent-adjusted ratings, venue-adjusted performance, attack/defense indices, set-piece threat, pressing/crossing profiles, discipline risk, home advantage, league/tournament style, and congestion/rest.
+- For national teams with sparse data, reduce reliance on stale history and down-weight H2H.
+
+PIPELINE
+1) Prepare features normalized to league context, with time weighting.
+2) Multi-model generation (GBDT, Poisson-xG, LSTM, GNN, Bayesian overlay).
+3) Ensemble combination → calibrated 1X2 probabilities aligned with the aggregated scoreline distribution.
+4) Confidence calibration → High/Medium/Low using data richness, model agreement, and national-team sparsity flags.
+5) Structured reasoning sections: ML consensus, statistical patterns, tactical notes, uncertainty factors.
+6) Markets: BTTS, O/U 2.5 (and 1.5/3.5 if data allows), HT/FT, score ranges, corners.
+
+POST-PROCESSING RULES
+- Normalize every probability set to 100% (1X2, BTTS, O/U, HT/FT). Ensure Poisson scoreline probabilities integrate to 1 and are consistent with expected goals and outcome probabilities. Round sensibly while maintaining normalization.
+- Degrade gracefully with sparse or missing inputs: widen distributions and lower confidence; explicitly state uncertainty drivers in reasoning.
+
+MATCH
 - League: ${match.league}
 - Home Team: ${match.homeTeam}
 - Away Team: ${match.awayTeam}
 - Date: ${new Date(match.date).toISOString()}
 
-Context (provided):
+CONTEXT (provided)
 ${contextPrompt}
 
-Inputs (API-fed):
-- League table snippet: top/bottom plus both teams’ rank/points (live).
-- Recent form: last 5 results per team, or live form override from fixtures API.
-- Head-to-head: wins/draws, BTTS historic rate.
-- Team stats: goals for/against, shots, xG, possession, discipline (current season).
-- Injuries/suspensions: summarized per team from live feed.
-- Context: home/away, travel, congestion, rest days.
-
-Modeling approach:
-- Gradient Boosted Trees → baseline on tabular stats.
-- Poisson regression → expected goals → scoreline probabilities.
-- Neural nets → LSTM for recent form streaks; GNN for team-player/tactical interactions.
-- Ensemble integration → combine outputs with validation-based weights.
-- Bayesian uncertainty → priors for injuries/fatigue; confidence bands.
-
-Prediction pipeline:
-- Feature engineering: form, goal rates, defence strength, home advantage, league style, time-weighting.
-- Multi-model generation: XGBoost baseline, Poisson xG/scorelines, LSTM momentum, GNN tactics, Bayesian overlay.
-- Ensemble combination: produce home/draw/away probabilities.
-- Confidence calibration: label High/Medium/Low depending on data richness and model agreement.
-- Structured reasoning: sections for ML consensus, statistical patterns, tactical notes, uncertainty factors.
-- Market views: O/U 2.5, BTTS, HT/FT, score ranges, corners.
-
-Final outputs must map to the response schema fields only (no extras) and be consistent with the modeling approach above.
+OUTPUT FORMAT
+- Return ONLY JSON per the provided response schema (no extra keys, no Markdown, no prose outside JSON). Then, after the JSON, provide concise reasoning notes sections (plain text), as described.
+- However, you MUST serialize the JSON to match the response schema supplied by the system (do not invent fields). If some inputs are not available, still produce calibrated outputs and reflect uncertainty.
 `;
 
     // Throttle + retry wrapper

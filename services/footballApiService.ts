@@ -1,5 +1,7 @@
 import { Match, Team, LeagueTableRow, League, Player, TeamSeasonStats, MatchResult, Transfer, Injury } from '../types';
+import { nowLondonDateString, formatDateYYYYMMDDLondon, isSameLondonDay } from '../utils/timezone';
 import { resolveTeamName } from './teamDataService';
+import { errorTrackingService } from './errorTrackingService';
 
 // API-Football.com configuration
 const API_BASE_URL = 'https://v3.football.api-sports.io';
@@ -291,6 +293,7 @@ export const makeApiRequest = async (endpoint: string, params: Record<string, an
 
   // Retry with exponential backoff on 429 / transient errors
   let lastError: any = null;
+  const startedAt = Date.now();
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       console.log(`🌐 API request (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${endpoint} - ${apiUrl.toString()}`);
@@ -312,6 +315,11 @@ export const makeApiRequest = async (endpoint: string, params: Record<string, an
         apiCallCount++;
         console.log(`✅ API call #${apiCallCount}/${MAX_DAILY_CALLS} via ${platform} - ${endpoint}`);
         cache.set(cacheKey, { data, timestamp: Date.now() });
+        // Structured API log
+        try {
+          const elapsed = Date.now() - startedAt;
+          errorTrackingService.captureApiCall(endpoint, 'GET', 200, elapsed);
+        } catch {}
         await delay(500); // basic pacing
         return data;
       }
@@ -320,6 +328,10 @@ export const makeApiRequest = async (endpoint: string, params: Record<string, an
       const errorText = await response.text();
       const is429 = response.status === 429 || /rate limit/i.test(errorText);
       const isTransient = response.status >= 500 && response.status < 600;
+      try {
+        const elapsed = Date.now() - startedAt;
+        errorTrackingService.captureApiCall(endpoint, 'GET', response.status, elapsed);
+      } catch {}
       if ((is429 || isTransient) && attempt < MAX_RETRIES) {
         const retryAfter = Number(response.headers.get('retry-after'));
         const base = retryAfter ? retryAfter * 1000 : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
@@ -335,6 +347,10 @@ export const makeApiRequest = async (endpoint: string, params: Record<string, an
       const msg = String(err?.message || err);
       const isRateLimited = /429|rate limit|quota/i.test(msg);
       const isNetwork = /fetch|network|ECONN|ETIMEDOUT/i.test(msg);
+      try {
+        const elapsed = Date.now() - startedAt;
+        errorTrackingService.captureApiCall(endpoint, 'GET', undefined, elapsed);
+      } catch {}
       const shouldRetry = (isRateLimited || isNetwork) && attempt < MAX_RETRIES;
       if (shouldRetry) {
         const base = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
@@ -488,8 +504,8 @@ export const getFinishedFixtures = async (daysBack: number = 3): Promise<{ id: s
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - daysBack);
     
-    const fromDate = startDate.toISOString().split('T')[0];
-    const toDate = endDate.toISOString().split('T')[0];
+    const fromDate = formatDateYYYYMMDDLondon(startDate);
+    const toDate = formatDateYYYYMMDDLondon(endDate);
     
     const params = {
       from: fromDate,
@@ -528,7 +544,7 @@ export const getTodaysFixtures = async (league: League): Promise<Match[]> => {
   }
   
   try {
-    const todayStr = '2025-09-20';
+    const todayStr = nowLondonDateString();
     const data = await makeApiRequest('/fixtures', {
       league: leagueId,
       season: getCurrentSeason(),
@@ -613,8 +629,7 @@ export const getAllUpcomingFixtures = async (): Promise<Match[]> => {
     // STEP 1.5: Get today's INTERNATIONAL competitions (Champions League, etc.)
     try {
       console.log(`🔥🏆 Loading TODAY'S INTERNATIONAL competitions - ${new Date().toISOString()}...`);
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
+      const todayStr = nowLondonDateString();
       
       const internationalCompetitions = [
         { id: 2, name: 'UEFA Champions League' },
@@ -692,16 +707,14 @@ export const getAllUpcomingFixtures = async (): Promise<Match[]> => {
     );
     
     // Sort: Today's games first, then by date
-    const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    const now = new Date();
     
     uniqueFixtures.sort((a, b) => {
       const aDate = new Date(a.date);
       const bDate = new Date(b.date);
       
-      const aIsToday = aDate >= todayStart && aDate < todayEnd;
-      const bIsToday = bDate >= todayStart && bDate < todayEnd;
+      const aIsToday = isSameLondonDay(aDate, now);
+      const bIsToday = isSameLondonDay(bDate, now);
       
       // Today's games always come first
       if (aIsToday && !bIsToday) return -1;
@@ -710,17 +723,14 @@ export const getAllUpcomingFixtures = async (): Promise<Match[]> => {
       return aDate.getTime() - bDate.getTime();
     });
     
-    const todaysCount = uniqueFixtures.filter(f => {
-      const fDate = new Date(f.date);
-      return fDate >= todayStart && fDate < todayEnd;
-    }).length;
+    const todaysCount = uniqueFixtures.filter(f => isSameLondonDay(new Date(f.date), now)).length;
     
     console.log(`🎯 getAllUpcomingFixtures complete:`, {
       todaysGames: todaysCount,
       totalFixtures: uniqueFixtures.length,
       firstFixture: uniqueFixtures[0] || 'none',
       todaysSample: uniqueFixtures.slice(0, Math.min(5, todaysCount))
-        .map(f => `${f.homeTeam} vs ${f.awayTeam} (${new Date(f.date).toLocaleTimeString()})`)
+        .map(f => `${f.homeTeam} vs ${f.awayTeam} (${new Date(f.date).toLocaleTimeString('en-GB', { timeZone: 'Europe/London' })})`)
     });
     
     return uniqueFixtures;
@@ -1360,4 +1370,71 @@ export const clearCache = (): void => {
 };
 
 // Export alias for getTeamDetails - FIXED CLOUDFLARE DEPLOYMENT ISSUE
-export const getTeamData = getTeamDetails;
+export const getTeamDataFromApi = getTeamDetails;
+
+// ===== Global search and inference helpers =====
+export interface ApiTeamSearchResult {
+  teamId: number;
+  name: string;
+  logo?: string;
+  country?: string;
+}
+
+// Search clubs and national teams globally by name (API-Football /teams search)
+export const searchTeamsByName = async (query: string): Promise<ApiTeamSearchResult[]> => {
+  if (!query || query.trim().length < 2) return [];
+  try {
+    const data = await makeApiRequest('/teams', { search: query.trim() });
+    const list: any[] = data?.response || [];
+    return list.map((item: any) => ({
+      teamId: Number(item?.team?.id),
+      name: item?.team?.name,
+      logo: item?.team?.logo,
+      country: item?.team?.country
+    })).filter(t => !!t.teamId && !!t.name);
+  } catch (e) {
+    console.warn('Team search failed for', query, e);
+    return [];
+  }
+};
+
+export interface InferredCompetition {
+  leagueId: number;
+  season: number;
+  leagueName?: string;
+}
+
+// Find the current or upcoming competition a team is playing in (league + season)
+export const inferCompetitionForTeam = async (teamId: number): Promise<InferredCompetition | null> => {
+  if (!teamId) return null;
+  try {
+    // Prefer the nearest upcoming fixture as source of truth
+    const upcoming = await makeApiRequest('/fixtures', { team: teamId, next: 5 });
+    const upcomingList: any[] = upcoming?.response || [];
+    const candidate = upcomingList.find(f => f?.league?.id && f?.league?.season);
+    if (candidate) {
+      return {
+        leagueId: Number(candidate.league.id),
+        season: Number(candidate.league.season),
+        leagueName: candidate.league.name
+      };
+    }
+
+    // Fallback: last played fixture
+    const last = await makeApiRequest('/fixtures', { team: teamId, last: 3 });
+    const lastList: any[] = last?.response || [];
+    const lastCandidate = lastList.find(f => f?.league?.id && f?.league?.season) || lastList[0];
+    if (lastCandidate?.league?.id) {
+      return {
+        leagueId: Number(lastCandidate.league.id),
+        season: Number(lastCandidate.league.season) || getCurrentSeason(),
+        leagueName: lastCandidate.league.name
+      };
+    }
+
+    return null;
+  } catch (e) {
+    console.warn('inferCompetitionForTeam failed for team', teamId, e);
+    return null;
+  }
+};
