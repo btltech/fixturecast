@@ -150,85 +150,38 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
   // Group matches by league - ONLY SHOW LEAGUES WITH TODAY'S GAMES, prioritize by league importance
   const groupedMatches = useMemo(() => {
     const today = new Date();
-    
-    // Define featured leagues with priority (most important first)
-    const FEATURED_LEAGUES_PRIORITY = [
-      // UEFA Competitions (Highest Priority)
-      'UEFA Champions League',
-      'UEFA Europa League', 
-      'UEFA Europa Conference League',
-      // Top 5 Leagues (Major Domestic)
-      'Premier League',
-      'La Liga',
-      'Serie A', 
-      'Bundesliga',
-      'Ligue 1',
-      // Championship
-      'EFL Championship',
-      // Other Major European
-      'Eredivisie',
-      'Primeira Liga',
-      'Scottish Premiership',
-      'Turkish Süper Lig',
-      'Belgian Pro League',
-      // International
-      'Liga MX',
-      'Major League Soccer',
-      'Brasileirão Série A',
-      'Argentine Liga Profesional'
-    ];
 
-    // Get only TODAY'S matches from filtered matches
-    const todaysMatches: Match[] = [];
+    // Group matches by league for TODAY first
+    const groupsToday: { [key: string]: Match[] } = {};
+    const groupsUpcoming: { [key: string]: Match[] } = {};
 
     filteredMatches.forEach(match => {
       const matchDate = new Date(match.date);
-      if (isSameLondonDay(matchDate, today)) {
-        todaysMatches.push(match);
+      const target = isSameLondonDay(matchDate, today) ? groupsToday : groupsUpcoming;
+      if (!target[match.league]) {
+        target[match.league] = [];
       }
+      target[match.league].push(match);
     });
 
-    const groups: { [key: string]: Match[] } = {};
+    // Prefer TODAY groups; if none, fallback to UPCOMING groups
+    const base = Object.keys(groupsToday).length > 0 ? groupsToday : groupsUpcoming;
 
-    // Only group TODAY's matches by league - don't show leagues without today's games
-    todaysMatches.forEach(match => {
-      // Only show featured leagues + championship
-      if (FEATURED_LEAGUES_PRIORITY.includes(match.league)) {
-        const leagueName = `🔥 TODAY - ${match.league}`;
-        if (!groups[leagueName]) {
-          groups[leagueName] = [];
-        }
-        groups[leagueName].push(match);
-      }
+    // Sort matches within each league by time
+    Object.keys(base).forEach(league => {
+      base[league].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     });
 
-    // Sort within each league group by date/time
-    Object.keys(groups).forEach(league => {
-      groups[league].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    });
+    // Sort league groups alphabetically for a neutral default ordering
+    const sortedEntries = Object.entries(base).sort(([a], [b]) => a.localeCompare(b));
 
-    // Sort league groups by priority (most important leagues first)
-    const sortedEntries = Object.entries(groups).sort(([a], [b]) => {
-      const aLeague = a.replace('🔥 TODAY - ', '');
-      const bLeague = b.replace('🔥 TODAY - ', '');
-      
-      const aIndex = FEATURED_LEAGUES_PRIORITY.indexOf(aLeague);
-      const bIndex = FEATURED_LEAGUES_PRIORITY.indexOf(bLeague);
+    // Prefix label to clarify whether these are TODAY or UPCOMING
+    const labeled = sortedEntries.map(([league, matches]) => ([
+      `${Object.keys(groupsToday).length > 0 ? '🔥 TODAY - ' : '📅 UPCOMING - '}${league}`,
+      matches
+    ] as const));
 
-      // If both leagues are in priority list, sort by priority
-      if (aIndex !== -1 && bIndex !== -1) {
-        return aIndex - bIndex;
-      }
-
-      // If only one is in priority list, prioritize it
-      if (aIndex !== -1) return -1;
-      if (bIndex !== -1) return 1;
-
-      // If neither is in priority list, sort alphabetically
-      return aLeague.localeCompare(bLeague);
-    });
-
-    return Object.fromEntries(sortedEntries);
+    return Object.fromEntries(labeled);
   }, [filteredMatches]);
 
 

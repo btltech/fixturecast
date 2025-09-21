@@ -19,6 +19,11 @@ const CloudIntegrityPanel: React.FC<CloudIntegrityPanelProps> = ({ className = '
 
   const checkCloudStatus = async () => {
     try {
+      // Skip cloud probe in local development environments
+      if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.startsWith('127.') || window.location.protocol === 'http:')) {
+        setCloudStatus('disconnected');
+        return;
+      }
       // Probe the cloud API; if it responds, mark as connected and load stats
       await cloudPredictionService.getAccuracyStats();
       setCloudStatus('connected');

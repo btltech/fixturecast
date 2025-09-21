@@ -13,15 +13,27 @@ export class CloudPredictionService {
       window.location.hostname.includes('.pages.dev') || 
       window.location.hostname.includes('cloudflare')
     );
+    const isLocalDev = typeof window !== 'undefined' && (
+      window.location.hostname === 'localhost' || window.location.hostname.startsWith('127.')
+    );
     
     // Use client proxy which injects server-side secret
-    this.baseUrl = isCloudflare || typeof window === 'undefined' 
-      ? '/api/predictions/client'
-      : `${window.location.origin}/api/predictions/client`;
+    // In local dev via Vite, the Cloudflare function routes are not mounted; disable cloud calls
+    this.baseUrl = isLocalDev
+      ? '/__no_cloud_local__'
+      : (isCloudflare || typeof window === 'undefined' 
+          ? '/api/predictions/client'
+          : `${window.location.origin}/api/predictions/client`);
   }
 
   private async makeRequest(method: string, data?: any, params?: Record<string, string>): Promise<any> {
-    const url = new URL(this.baseUrl);
+    // Short-circuit in local dev to avoid invalid URL and network calls
+    if (this.baseUrl === '/__no_cloud_local__') {
+      throw new SyntaxError('Cloud not available in local dev');
+    }
+    const url = /^https?:\/\//i.test(this.baseUrl)
+      ? new URL(this.baseUrl)
+      : new URL(this.baseUrl, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
     
     if (params) {
       Object.entries(params).forEach(([key, value]) => {

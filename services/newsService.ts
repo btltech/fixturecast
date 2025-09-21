@@ -113,6 +113,26 @@ const RSS_FEEDS = [
 const CACHE_KEY = 'fixturecast_news_cache';
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
+// Helper: competition focus filter (Leagues + Championship only)
+const ALLOWED_COMPETITION_KEYWORDS = [
+  'premier league',
+  'la liga',
+  'serie a',
+  'bundesliga',
+  'ligue 1',
+  'championship', // EFL Championship
+];
+
+const normalize = (s: string) => s
+  .toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const isCompetitionFocused = (title: string, description: string): boolean => {
+  const t = normalize(title || '');
+  const d = normalize(description || '');
+  return ALLOWED_COMPETITION_KEYWORDS.some(k => t.includes(k) || d.includes(k));
+};
+
 // Simple RSS parser
 const parseRSS = async (feedUrl: string, sourceName: NewsArticle['source']): Promise<NewsArticle[]> => {
   try {
@@ -157,6 +177,11 @@ const parseRSS = async (feedUrl: string, sourceName: NewsArticle['source']): Pro
       
       // Clean up description (remove HTML tags and limit length)
       const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 150) + '...';
+      
+      // Filter: keep only articles focused on leagues and the Championship
+      if (!isCompetitionFocused(title, cleanDescription)) {
+        return;
+      }
       
       articles.push({
         id: `${sourceName.toLowerCase().replace(/\s+/g, '-')}-${index}`,

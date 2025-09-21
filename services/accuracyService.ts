@@ -323,8 +323,14 @@ export const storeDailyPrediction = async (match: Match, prediction: Prediction)
             }));
           }
         } catch {}
-      } catch (cloudError) {
-        console.warn('Failed to store prediction in cloud (local copy preserved):', cloudError);
+      } catch (cloudError: any) {
+        // Suppress noisy cloud errors in local dev; show concise warning
+        const msg = String(cloudError?.message || cloudError);
+        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.startsWith('127.'))) {
+          console.warn('Cloud sync skipped in local dev');
+        } else {
+          console.warn('Failed to store prediction in cloud (local copy preserved):', msg);
+        }
       }
     }
     

@@ -34,12 +34,51 @@ const LeaguePage: React.FC<LeaguePageProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Validate league parameter
+  // Validate and normalize league parameter (handles spaces, hyphens, encoding, and diacritics)
   const league = useMemo(() => {
     if (!leagueParam) return null;
-    // Convert string to League enum if possible
-    const leagueValue = Object.values(League).find(l => l === leagueParam);
-    return leagueValue || null;
+
+    const decodeSafe = (v: string) => {
+      try { return decodeURIComponent(v); } catch { return v; }
+    };
+
+    const normalize = (v: string) => decodeSafe(v)
+      .replace(/-/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    const paramNorm = normalize(leagueParam);
+
+    // Direct exact match first
+    const exact = Object.values(League).find(l => l === decodeSafe(leagueParam));
+    if (exact) return exact;
+
+    // Case/diacritic-insensitive match
+    const diacriticInsensitive = Object.values(League).find(l => normalize(l) === paramNorm);
+    if (diacriticInsensitive) return diacriticInsensitive;
+
+    // Common aliases
+    const aliases: Record<string, League> = {
+      'efl championship': League.Championship,
+      'championship': League.Championship,
+      'uefa champions league': League.ChampionsLeague,
+      'champions league': League.ChampionsLeague,
+      'uefa europa league': League.EuropaLeague,
+      'europa league': League.EuropaLeague,
+      'uefa europa conference league': League.EuropaConferenceLeague,
+      'europa conference league': League.EuropaConferenceLeague,
+      'premier league': League.PremierLeague,
+      'la liga': League.LaLiga,
+      'bundesliga': League.Bundesliga,
+      'ligue 1': League.Ligue1,
+      'super lig': League.SuperLig,
+      'sueper lig': League.SuperLig,
+    };
+    if (aliases[paramNorm]) return aliases[paramNorm];
+
+    return null;
   }, [leagueParam]);
 
   // Get league fixtures
@@ -92,24 +131,26 @@ const LeaguePage: React.FC<LeaguePageProps> = ({
       setError(null);
 
       try {
-        // Load fixtures and table in parallel
-        await Promise.all([
-          loadLeagueFixtures(league),
-          loadLeagueTable(league)
-        ]);
+        // Load fixtures and table in parallel (defensive: functions may be undefined in rare cases)
+        const loaders: Promise<any>[] = [];
+        if (typeof loadLeagueFixtures === 'function') loaders.push(loadLeagueFixtures(league));
+        if (typeof loadLeagueTable === 'function') loaders.push(loadLeagueTable(league));
+        await Promise.all(loaders);
 
-        addToast(`Loaded ${leagueFixtures.length} fixtures for ${league}`, 'success');
+        const count = (leagueFixtures || []).length;
+        if (typeof addToast === 'function') addToast(`Loaded ${count} fixtures for ${league}`, 'success');
       } catch (err) {
         console.error('Failed to load league data:', err);
         setError('Failed to load league data. Please try again.');
-        addToast('Failed to load league data', 'error');
+        if (typeof addToast === 'function') addToast('Failed to load league data', 'error');
       } finally {
         setLoading(false);
       }
     };
 
     loadLeagueData();
-  }, [league, loadLeagueFixtures, loadLeagueTable, addToast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [league]);
 
   // Format date header
   const formatDateHeader = (dateString: string): { day: string; date: string; isToday: boolean; isTomorrow: boolean } => {

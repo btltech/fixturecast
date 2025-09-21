@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Match, Prediction, League } from '../types';
 import MatchCard from './MatchCard';
 import TeamLogo from './TeamLogo';
@@ -95,6 +96,7 @@ const Countdown: React.FC<{ targetDate: Date }> = ({ targetDate }) => {
 
 const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navigateToFixtures, setSelectedLeagueFilter, onSelectPrediction }) => {
   const { fixtures, teams, leagueTables, favoriteTeams, toggleFavoriteTeam, lastUpdated, refreshRealTimeData, accuracyStats, getAccuracyDisplay, liveMatches, fetchLiveMatches, getPrediction, loadLeagueFixtures, loadLeagueTable, apiUsage, isLoading, getTeamDataStatus, refreshAllTeamDetails } = useAppContext();
+  const navigate = useNavigate();
 
   // Debug: Log fixtures status
   console.log('📊 Dashboard: fixtures length:', fixtures.length);
@@ -291,6 +293,75 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         <Countdown targetDate={nextMatchday} />
       </section>
 
+      {matchOfTheDay && (
+        <section>
+          <h2 className="text-3xl font-bold tracking-tight text-white mb-6">Match of the Day</h2>
+          <div 
+            className="rounded-xl overflow-hidden shadow-2xl border border-gray-700 p-8 relative match-background"
+            data-bg={`${homeTeamColor}_${awayTeamColor}`}
+          >
+              <div className="flex flex-col md:flex-row items-center justify-around text-center">
+                  <div className="flex flex-col items-center space-y-3 w-full md:w-1/3">
+                      <TeamLogo teamName={getHomeTeamName(matchOfTheDay)} size="large" clickable={true} onClick={() => onSelectTeam(getHomeTeamName(matchOfTheDay))} />
+                      <h3
+                        className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors duration-200"
+                        onClick={() => onSelectTeam(getHomeTeamName(matchOfTheDay))}
+                      >
+                        {getHomeTeamName(matchOfTheDay)}
+                      </h3>
+                  </div>
+
+                  <div className="flex flex-col items-center my-6 md:my-0">
+                      <p className="text-5xl font-extrabold text-gray-400">vs</p>
+                      <p className="text-blue-300 font-semibold mt-4">{getMatchLeagueName(matchOfTheDay)}</p>
+                      <p className="text-sm text-gray-400">{new Date(matchOfTheDay.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</p>
+                      <p className="text-lg font-bold text-white mt-2">{new Date(matchOfTheDay.date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
+                  </div>
+                  
+                  <div className="flex flex-col items-center space-y-3 w-full md:w-1/3">
+                      <TeamLogo teamName={getAwayTeamName(matchOfTheDay)} size="large" clickable={true} onClick={() => onSelectTeam(getAwayTeamName(matchOfTheDay))} />
+                      <h3
+                        className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors duration-200"
+                        onClick={() => onSelectTeam(getAwayTeamName(matchOfTheDay))}
+                      >
+                        {getAwayTeamName(matchOfTheDay)}
+                      </h3>
+                  </div>
+              </div>
+              <div className="mt-8 text-center">
+                  <button
+                      onClick={() => onSelectMatch(matchOfTheDay)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200 shadow-lg"
+                  >
+                      View Full Prediction
+                  </button>
+              </div>
+          </div>
+        </section>
+      )}
+
+      <section>
+        <div className="flex justify-between items-center mb-6">
+            <h2 className="text-3xl font-bold tracking-tight text-white">Upcoming Focus</h2>
+            <button 
+                onClick={navigateToFixtures}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+                View All Fixtures
+            </button>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+          {upcomingFocusMatches.map((match) => (
+            <MatchCard 
+                key={match.id} 
+                match={match} 
+                onSelectMatch={onSelectMatch}
+                onSelectTeam={onSelectTeam}
+            />
+          ))}
+        </div>
+      </section>
+
       {/* Professional Team Data Status */}
       <section className="bg-gray-800 rounded-xl p-6 shadow-2xl border border-gray-700">
         <div className="flex items-center justify-between mb-4">
@@ -413,10 +484,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
                   e.preventDefault();
                   console.log(`🎯 Clicking league: ${league}`);
                   try {
-                    // Set league filter and navigate to fixtures
+                    // Use Fixtures page with pre-selected league filter for robustness
                     setSelectedLeagueFilter(league);
                     navigateToFixtures();
-                    console.log(`✅ Successfully navigated to fixtures for ${league}`);
+                    console.log(`✅ Navigated to fixtures for ${league}`);
                   } catch (error) {
                     console.error(`❌ Error navigating to fixtures for ${league}:`, error);
                   }
@@ -476,6 +547,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         </p>
       </section>
 
+      {/* Team Form Trends (moved below Featured Leagues) */}
+      <section>
+        <FormTrendsOverview 
+          matches={upcomingFocusMatches}
+          maxMatches={6}
+        />
+      </section>
+
       {/* Enhanced Prediction Accuracy Tracker */}
       <section>
         <EnhancedAccuracyTracker onSelectPrediction={onSelectPrediction} />
@@ -486,10 +565,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         <CloudIntegrityPanel />
       </section>
 
-      {/* Performance Dashboard */}
-      <section>
-        <PerformanceDashboard />
-      </section>
+      
 
       {/* Confidence Overview */}
       <section>
@@ -499,13 +575,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         />
       </section>
 
-      {/* Team Form Trends */}
-      <section>
-        <FormTrendsOverview 
-          matches={upcomingFocusMatches}
-          maxMatches={6}
-        />
-      </section>
+      
 
       {/* Deployment Status */}
       <section>
@@ -526,52 +596,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         </section>
       )}
 
-      {matchOfTheDay && (
-        <section>
-          <h2 className="text-3xl font-bold tracking-tight text-white mb-6">Match of the Day</h2>
-          <div 
-            className="rounded-xl overflow-hidden shadow-2xl border border-gray-700 p-8 relative match-background"
-            data-bg={`${homeTeamColor}_${awayTeamColor}`}
-          >
-              <div className="flex flex-col md:flex-row items-center justify-around text-center">
-                  <div className="flex flex-col items-center space-y-3 w-full md:w-1/3">
-                      <TeamLogo teamName={getHomeTeamName(matchOfTheDay)} size="large" clickable={true} onClick={() => onSelectTeam(getHomeTeamName(matchOfTheDay))} />
-                      <h3
-                        className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors duration-200"
-                        onClick={() => onSelectTeam(getHomeTeamName(matchOfTheDay))}
-                      >
-                        {getHomeTeamName(matchOfTheDay)}
-                      </h3>
-                  </div>
-
-                  <div className="flex flex-col items-center my-6 md:my-0">
-                      <p className="text-5xl font-extrabold text-gray-400">vs</p>
-                      <p className="text-blue-300 font-semibold mt-4">{getMatchLeagueName(matchOfTheDay)}</p>
-                      <p className="text-sm text-gray-400">{new Date(matchOfTheDay.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-                      <p className="text-lg font-bold text-white mt-2">{new Date(matchOfTheDay.date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
-                  </div>
-                  
-                  <div className="flex flex-col items-center space-y-3 w-full md:w-1/3">
-                      <TeamLogo teamName={getAwayTeamName(matchOfTheDay)} size="large" clickable={true} onClick={() => onSelectTeam(getAwayTeamName(matchOfTheDay))} />
-                      <h3
-                        className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors duration-200"
-                        onClick={() => onSelectTeam(getAwayTeamName(matchOfTheDay))}
-                      >
-                        {getAwayTeamName(matchOfTheDay)}
-                      </h3>
-                  </div>
-              </div>
-              <div className="mt-8 text-center">
-                  <button
-                      onClick={() => onSelectMatch(matchOfTheDay)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200 shadow-lg"
-                  >
-                      View Full Prediction
-                  </button>
-              </div>
-          </div>
-        </section>
-      )}
+      
 
       {/* All Teams */}
       <section className="bg-gray-800 rounded-xl p-6 shadow-2xl border border-gray-700">
@@ -620,26 +645,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         )}
       </section>
 
+      
+      {/* Performance Dashboard at bottom */}
       <section>
-        <div className="flex justify-between items-center mb-6">
-            <h2 className="text-3xl font-bold tracking-tight text-white">Upcoming Focus</h2>
-            <button 
-                onClick={navigateToFixtures}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
-            >
-                View All Fixtures
-            </button>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-          {upcomingFocusMatches.map((match) => (
-            <MatchCard 
-                key={match.id} 
-                match={match} 
-                onSelectMatch={onSelectMatch}
-                onSelectTeam={onSelectTeam}
-            />
-          ))}
-        </div>
+        <PerformanceDashboard />
       </section>
       
       {/* Navigation handled via onSelectTeam; modal removed */}

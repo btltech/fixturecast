@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, Navigate, useParams } from 'react-router-dom';
 import { getTeamData } from '../services/teamDataService';
 import { View, Match } from '../types';
@@ -12,7 +12,7 @@ const PredictionDetail: React.FC<PredictionDetailProps> = ({ onNavigate }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { matchId } = useParams<{ matchId: string }>();
-  const { fixtures, getPrediction } = useAppContext();
+  const { fixtures, getPrediction, fetchPrediction } = useAppContext();
 
   // Get prediction from route state or fetch by matchId
   let prediction = location.state?.prediction;
@@ -27,12 +27,34 @@ const PredictionDetail: React.FC<PredictionDetailProps> = ({ onNavigate }) => {
     }
   }
 
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  useEffect(() => {
+    const generateIfPossible = async () => {
+      if (!prediction && match) {
+        try {
+          setIsGenerating(true);
+          await fetchPrediction(match);
+          // After generation, navigate to match-detail flow which renders richer view
+          navigate(`/match/${match.id}`, { state: { match } });
+        } catch (e) {
+          // Fall back to match detail even if generation failed; it can retry there
+          navigate(`/match/${match.id}`, { state: { match } });
+        } finally {
+          setIsGenerating(false);
+        }
+      }
+    };
+    generateIfPossible();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
+
   if (!prediction) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center">
-        <div className="text-6xl mb-4">🤔</div>
-        <h2 className="text-xl font-bold text-white mb-2">No Prediction Selected</h2>
-        <p className="text-gray-400 mb-4">Please select a prediction to view detailed analysis.</p>
+        <div className="text-6xl mb-4">{isGenerating ? '⏳' : '🤔'}</div>
+        <h2 className="text-xl font-bold text-white mb-2">{isGenerating ? 'Generating Prediction…' : 'No Prediction Selected'}</h2>
+        <p className="text-gray-400 mb-4">{isGenerating ? 'Please wait while we prepare the prediction.' : 'Please select a prediction to view detailed analysis.'}</p>
         <button
           onClick={() => navigate('/')}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"

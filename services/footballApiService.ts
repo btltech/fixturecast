@@ -1,6 +1,6 @@
 import { Match, Team, LeagueTableRow, League, Player, TeamSeasonStats, MatchResult, Transfer, Injury } from '../types';
 import { nowLondonDateString, formatDateYYYYMMDDLondon, isSameLondonDay } from '../utils/timezone';
-import { resolveTeamName } from './teamDataService';
+import { resolveTeamName, getTeamData, isKnownTeam } from './teamDataService';
 import { errorTrackingService } from './errorTrackingService';
 
 // API-Football.com configuration
@@ -818,6 +818,13 @@ export const getAllTeams = async (): Promise<{ [key: string]: Team }> => {
 export const getTeamInfo = async (teamName: string): Promise<Team | null> => {
 
   try {
+    // Fast-path: use rich local catalog for well-known teams to avoid API search noise
+    const canonical = resolveTeamName(teamName);
+    if (isKnownTeam(canonical)) {
+      const local = getTeamData(canonical);
+      return local;
+    }
+
     const data = await makeApiRequest('/teams', {
       search: teamName,
       season: getCurrentSeason()
