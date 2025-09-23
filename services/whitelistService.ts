@@ -15,6 +15,8 @@ const CORE_ALLOWED_LEAGUE_NAMES: string[] = [
   League.Bundesliga,
   League.Ligue1,
   League.Championship,
+  League.LeagueOne,
+  League.LeagueTwo,
 ];
 
 // Common marketplace/sponsor/alias variants → canonical
@@ -35,6 +37,12 @@ const leagueAliasToCanonical: Record<string, string> = {
   // Championship
   'championship': League.Championship,
   'efl championship': League.Championship,
+  'league one': League.LeagueOne,
+  'efl league one': League.LeagueOne,
+  'sky bet league one': League.LeagueOne,
+  'league two': League.LeagueTwo,
+  'efl league two': League.LeagueTwo,
+  'sky bet league two': League.LeagueTwo,
   // UEFA
   'champions league': League.ChampionsLeague,
   'uefa champions league': League.ChampionsLeague,

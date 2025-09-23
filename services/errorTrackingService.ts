@@ -66,17 +66,22 @@ export class ErrorTrackingService {
   private rateLimitCount = 0;
   private rateLimitWindow = 60000; // 1 minute
   private maxErrorsPerWindow = 10;
+  private handlersInitialized = false;
 
   constructor() {
+    if (typeof window === 'undefined') {
+      this.isEnabled = false;
+      this.sessionId = 'server';
+      this.reportingEndpoint = '';
+      return;
+    }
+
     this.sessionId = this.generateSessionId();
     this.reportingEndpoint = this.getReportingEndpoint();
     this.isEnabled = this.shouldEnableTracking();
-    
+
     if (this.isEnabled) {
-      this.initializeGlobalErrorHandlers();
-      this.initializeUnhandledRejectionHandler();
-      this.initializeNetworkErrorTracking();
-      this.startPerformanceMonitoring();
+      this.initializeHandlers();
     }
   }
 
@@ -165,6 +170,18 @@ export class ErrorTrackingService {
     setInterval(() => {
       this.checkMemoryUsage();
     }, 30000); // Every 30 seconds
+  }
+
+  private initializeHandlers(): void {
+    if (this.handlersInitialized) {
+      return;
+    }
+
+    this.initializeGlobalErrorHandlers();
+    this.initializeUnhandledRejectionHandler();
+    this.initializeNetworkErrorTracking();
+    this.startPerformanceMonitoring();
+    this.handlersInitialized = true;
   }
 
   /**
@@ -452,16 +469,25 @@ export class ErrorTrackingService {
    * Get reporting endpoint based on environment
    */
   private getReportingEndpoint(): string {
-    if (this.isDevelopment()) {
-      return '/api/errors'; // Local development
+    if (!this.isBrowser()) {
+      return '';
     }
-    return 'https://api.fixturecast.com/errors'; // Production
+
+    if (this.isDevelopment()) {
+      return '/api/errors';
+    }
+
+    return 'https://api.fixturecast.com/errors';
   }
 
   /**
    * Check if tracking should be enabled
    */
   private shouldEnableTracking(): boolean {
+    if (!this.isBrowser()) {
+      return false;
+    }
+
     // Disable in development by default, enable with flag
     if (this.isDevelopment()) {
       return localStorage.getItem('enableErrorTracking') === 'true';
@@ -475,6 +501,10 @@ export class ErrorTrackingService {
    * Check if in development mode
    */
   private isDevelopment(): boolean {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
     return process.env.NODE_ENV === 'development' || 
            window.location.hostname === 'localhost';
   }
@@ -527,10 +557,15 @@ export class ErrorTrackingService {
    */
   public setEnabled(enabled: boolean): void {
     this.isEnabled = enabled;
-    localStorage.setItem(
-      enabled ? 'enableErrorTracking' : 'disableErrorTracking',
-      'true'
-    );
+
+    if (enabled) {
+      localStorage.removeItem('disableErrorTracking');
+      localStorage.setItem('enableErrorTracking', 'true');
+      this.initializeHandlers();
+    } else {
+      localStorage.removeItem('enableErrorTracking');
+      localStorage.setItem('disableErrorTracking', 'true');
+    }
   }
 
   /**
@@ -549,6 +584,10 @@ export class ErrorTrackingService {
     if (this.errorQueue.length > 0) {
       await this.sendErrorReports();
     }
+  }
+
+  private isBrowser(): boolean {
+    return typeof window !== 'undefined';
   }
 }
 

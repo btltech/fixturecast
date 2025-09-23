@@ -1,5 +1,5 @@
 import React, { createContext, useState, useCallback, useMemo, useContext, ReactNode, useEffect, useRef } from 'react';
-import { nowLondonDateString } from '../utils/timezone';
+import { nowLondonDateString, isSameLondonDay } from '../utils/timezone';
 import { Match, Prediction, Toast as ToastType, Alert, PastPrediction, Team, LeagueTableRow, League, AppData, AlertType, PredictionAccuracy, AccuracyStats, LiveMatch, LiveMatchUpdate } from '../types';
 import { getMatchPrediction } from '../services/geminiService';
 import { buildContextForMatch } from '../utils/contextUtils';
@@ -26,6 +26,7 @@ import {
     getRecentTeamForm,
     getTeamStats
 } from '../services/footballApiService';
+import { generatePredictionsForMatches } from '../services/predictionService';
 
 interface AppContextType {
     // State
@@ -46,6 +47,7 @@ interface AppContextType {
     liveMatches: LiveMatch[];
     liveMatchUpdates: { [matchId: string]: LiveMatchUpdate };
     teamCache: { [teamName: string]: { data: Team; timestamp: number; expiresAt: number } };
+    todaysFixturesWithPredictions: { match: Match; prediction: Prediction | null; loading: boolean }[];
 
     // Functions
     loadInitialData: () => void;
@@ -1040,7 +1042,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
     }, []);
     
-    const value = {
+  const todaysFixturesWithPredictions = useMemo(() => {
+    const today = new Date();
+    return (appData.fixtures || [])
+      .filter(match => isSameLondonDay(new Date(match.date), today))
+      .map(match => ({
+        match,
+        prediction: predictionCache[match.id] || null,
+        loading: !predictionCache[match.id]
+      }));
+  }, [appData.fixtures, predictionCache]);
+
+  const value = {
         // State
         teams: appData.teams,
         fixtures: appData.fixtures,
@@ -1057,9 +1070,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         accuracyRecords,
         accuracyStats,
         liveMatches,
-        liveMatchUpdates,
-        teamCache,
-        // Functions
+    liveMatchUpdates,
+    teamCache,
+    todaysFixturesWithPredictions,
+    // Functions
         loadInitialData,
         refreshRealTimeData,
         addToast,

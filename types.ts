@@ -11,6 +11,8 @@ export enum League {
   Bundesliga = "Bundesliga",
   Ligue1 = "Ligue 1",
   Championship = "EFL Championship",
+  LeagueOne = "EFL League One",
+  LeagueTwo = "EFL League Two",
   BrasileiraoSerieA = "Brasileirão Série A",
   ArgentineLigaProfesional = "Argentine Liga Profesional",
   Eredivisie = "Eredivisie",

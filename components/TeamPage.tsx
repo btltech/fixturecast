@@ -220,10 +220,15 @@ const TeamPage: React.FC<TeamPageProps> = ({ onNavigate }) => {
                     </div>
                   )}
                   {!loading && (!teamData.squad || !teamData.seasonStats) && (
-                    <div className="flex items-center space-x-1 text-yellow-400">
-                      <span>⚠️</span>
-                      <span>Limited data</span>
+                <div className="flex items-center space-x-2 text-yellow-400">
+                  <span>⚠️</span>
+                  <div>
+                    <div>Limited data</div>
+                    <div className="text-[10px] text-gray-500">
+                      Some details are unavailable; showing basic team info only.
                     </div>
+                  </div>
+                </div>
                   )}
                 </div>
 

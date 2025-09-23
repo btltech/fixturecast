@@ -14,6 +14,7 @@ const TeamPage = React.lazy(() => import('./components/TeamPage'));
 const MyTeams = React.lazy(() => import('./components/MyTeams'));
 const News = React.lazy(() => import('./components/News'));
 const PredictionDetail = React.lazy(() => import('./components/PredictionDetail'));
+const TodaysPredictions = React.lazy(() => import('./components/TodaysPredictions'));
 
 // Wrapper component to handle navigation and provide router context
 const AppContent: React.FC = () => {
@@ -141,6 +142,10 @@ const AppContent: React.FC = () => {
         path="/prediction/:matchId"
         element={<PredictionDetail />}
       />
+      <Route
+        path="/predictions"
+        element={<TodaysPredictions />}
+      />
 
       {/* Catch-all route - redirect to dashboard */}
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -201,6 +206,16 @@ const Navigation: React.FC = () => {
             }`}
           >
             News
+          </Link>
+          <Link
+            to="/predictions"
+            className={`px-8 py-4 text-lg font-semibold rounded-lg transition-all duration-200 ${
+              isActive('/predictions')
+                ? 'bg-blue-600 text-white shadow-lg transform scale-105'
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white hover:shadow-md'
+            }`}
+          >
+            Today&apos;s Predictions
           </Link>
         </div>
       </div>

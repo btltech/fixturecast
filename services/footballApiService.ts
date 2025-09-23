@@ -89,17 +89,29 @@ export const hasBudget = (estimatedCalls: number = 1): boolean => {
 
 // Dynamic season calculation for future seasons
 const getCurrentSeason = (): number => {
-  // Fixed date: September 20, 2025 (current real date)
-  const currentYear = 2025;
-  const currentMonth = 9; // September
-  
-  // Football seasons typically run from August to May
-  // If we're in August or later, it's the current year's season
-  // If we're before August, it's the previous year's season
-  const season = currentMonth >= 8 ? currentYear : currentYear - 1;
-  console.log(`🔍 Season calculation: Current date 2025-09-20, month ${currentMonth}, calculated season: ${season}`);
-  
-  return season; // Will return 2025
+  try {
+    const londonDate = formatDateYYYYMMDDLondon(new Date());
+    const [yearString, monthString] = londonDate.split('-');
+    const year = Number(yearString);
+    const month = Number(monthString);
+
+    if (!Number.isNaN(year) && !Number.isNaN(month)) {
+      const season = month >= 8 ? year : year - 1;
+      console.log(`🔍 Season calculation: London date ${londonDate}, calculated season: ${season}`);
+      return season;
+    }
+
+    console.warn('🔍 Season calculation: Failed to parse London date parts, falling back to UTC date', { londonDate, yearString, monthString });
+  } catch (error) {
+    console.warn('🔍 Season calculation: Failed to use London date, falling back to UTC date', error);
+  }
+
+  const fallbackDate = new Date();
+  const fallbackMonth = fallbackDate.getUTCMonth() + 1; // 1-12
+  const fallbackYear = fallbackDate.getUTCFullYear();
+  const fallbackSeason = fallbackMonth >= 8 ? fallbackYear : fallbackYear - 1;
+  console.log(`🔍 Season calculation fallback: UTC date ${fallbackDate.toISOString()}, calculated season: ${fallbackSeason}`);
+  return fallbackSeason;
 };
 
 // League IDs mapping for API-Football.com
@@ -113,6 +125,8 @@ const LEAGUE_IDS = {
   'UEFA Europa League': 3,
   'UEFA Europa Conference League': 848,
   'EFL Championship': 40,
+  'EFL League One': 41,
+  'EFL League Two': 42,
   'Brasileirão Série A': 71,
   'Argentine Liga Profesional': 128,
   'Eredivisie': 88,
@@ -152,6 +166,8 @@ const LEAGUE_COUNTRIES: Record<string, string> = {
   'Serie B': 'Italy',
   'Segunda División': 'Spain',
   'Liga Portugal 2': 'Portugal',
+  'EFL League One': 'England',
+  'EFL League Two': 'England',
   'Belgian Pro League': 'Belgium',
   'A-League': 'Australia',
   
@@ -180,6 +196,10 @@ const ALLOWED_LEAGUES = [
   'Ligue 1',
   'EFL Championship',
   'Championship', // Alternative name for EFL Championship
+  'EFL League One',
+  'EFL League Two',
+  'EFL League One',
+  'EFL League Two',
   
   // Other Major European Leagues (Featured)
   'Eredivisie',
@@ -255,7 +275,8 @@ export const makeApiRequest = async (endpoint: string, params: Record<string, an
 
   // Choose the appropriate API endpoint based on environment
   let apiUrl;
-  let fetchOptions = { headers: { 'Accept': 'application/json' } };
+  const headers = new Headers({ 'Accept': 'application/json' });
+  const fetchOptions: RequestInit = { headers };
   let platform: 'LOCAL' | 'CLOUDFLARE' | 'VERCEL' | 'DIRECT' = 'LOCAL';
 
   if (isCloudflare || (isProduction && !isVercel)) {
@@ -284,11 +305,8 @@ export const makeApiRequest = async (endpoint: string, params: Record<string, an
     console.log(`🔍 Using direct API (proxy disabled): ${apiUrl.toString()}`);
     
     // Set headers for direct API access
-    fetchOptions.headers = {
-      ...fetchOptions.headers,
-      'X-RapidAPI-Key': API_KEY!,
-      'X-RapidAPI-Host': 'v3.football.api-sports.io'
-    };
+    headers.set('X-RapidAPI-Key', API_KEY!);
+    headers.set('X-RapidAPI-Host', 'v3.football.api-sports.io');
   }
 
   // Retry with exponential backoff on 429 / transient errors
@@ -585,6 +603,8 @@ export const getAllUpcomingFixtures = async (): Promise<Match[]> => {
   const featuredLeagues: League[] = [
     League.PremierLeague,
     League.Championship,
+    League.LeagueOne,
+    League.LeagueTwo,
     League.LaLiga,
     League.SerieA,
     League.Bundesliga,
@@ -750,6 +770,8 @@ export const getAllTeams = async (): Promise<{ [key: string]: Team }> => {
   const leagueIds = [
     LEAGUE_IDS['Premier League'],
     LEAGUE_IDS['EFL Championship'],
+    LEAGUE_IDS['EFL League One'],
+    LEAGUE_IDS['EFL League Two'],
     LEAGUE_IDS['La Liga'],
     LEAGUE_IDS['Serie A'],
     LEAGUE_IDS['Bundesliga'],
@@ -1015,8 +1037,6 @@ export const getTeamDetails = async (teamName: string): Promise<Team | null> => 
       founded: undefined,
       venue: undefined,
       squad: undefined,
-      statistics: undefined,
-      recentFixtures: undefined,
       transfers: undefined,
       injuries: undefined
     };
@@ -1249,6 +1269,8 @@ export const getAllLeagueTables = async (): Promise<{ [key in League]?: LeagueTa
     League.BrasileiraoSerieA,
     League.ArgentineLigaProfesional,
     League.SuperLig,
+    League.LeagueOne,
+    League.LeagueTwo,
     League.LigaMX,
     League.MLS
   ];

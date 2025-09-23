@@ -38,6 +38,47 @@ const TEAM_ALIASES: { [alias: string]: string } = {
   'Bayelsa Utd': 'Bayelsa United',
   'Abia Warriors FC': 'Abia Warriors',
   'El Kanemi Warriors': 'El-Kanemi Warriors',
+  // English lower league aliases
+  'Bolton Wanderers FC': 'Bolton Wanderers',
+  'Peterborough Utd': 'Peterborough United',
+  'Charlton Athletic FC': 'Charlton Athletic',
+  'Portsmouth FC': 'Portsmouth',
+  'Derby County FC': 'Derby County',
+  'Blackpool FC': 'Blackpool',
+  'Lincoln City FC': 'Lincoln City',
+  'Barnsley FC': 'Barnsley',
+  'Oxford United FC': 'Oxford United',
+  'Wycombe Wanderers FC': 'Wycombe Wanderers',
+  'Cambridge Utd': 'Cambridge United',
+  'Northampton Town FC': 'Northampton Town',
+  'Leyton Orient FC': 'Leyton Orient',
+  'Stevenage FC': 'Stevenage',
+  'Port Vale FC': 'Port Vale',
+  'Bristol Rovers FC': 'Bristol Rovers',
+  'Cheltenham Town FC': 'Cheltenham Town',
+  'Reading FC': 'Reading',
+  'Shrewsbury Town FC': 'Shrewsbury Town',
+  'Burton Albion FC': 'Burton Albion',
+  'Exeter City FC': 'Exeter City',
+  'Fleetwood Town FC': 'Fleetwood Town',
+  'Notts County FC': 'Notts County',
+  'Mansfield Town FC': 'Mansfield Town',
+  'Wrexham AFC': 'Wrexham',
+  'Crewe Alexandra FC': 'Crewe Alexandra',
+  'Bradford City AFC': 'Bradford City',
+  'Milton Keynes Dons': 'MK Dons',
+  'MK Dons FC': 'MK Dons',
+  'Gillingham FC': 'Gillingham',
+  'Accrington Stanley FC': 'Accrington Stanley',
+  'Barrow AFC': 'Barrow',
+  'Swindon Town FC': 'Swindon Town',
+  'AFC Wimbledon': 'Wimbledon',
+  'Walsall FC': 'Walsall',
+  'Colchester United FC': 'Colchester United',
+  'Tranmere Rovers FC': 'Tranmere Rovers',
+  'Morecambe FC': 'Morecambe',
+  'Crawley Town FC': 'Crawley Town',
+  'Stockport County FC': 'Stockport County',
 };
 
 export const resolveTeamName = (name: string): string => {
@@ -612,6 +653,207 @@ export const TEAM_DATA: { [key: string]: Team } = {
     logo: 'https://media.api-sports.io/football/teams/1618.png',
     shortName: 'VAN',
     jerseyColors: { primary: '#0000FF', secondary: '#FFFFFF' }
+  },
+  // EFL League One
+  'Barnsley': {
+    logo: 'https://media.api-sports.io/football/teams/60.png',
+    shortName: 'BAR',
+    jerseyColors: { primary: '#E50012', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Oakwell'
+  },
+  'Birmingham City': {
+    logo: 'https://media.api-sports.io/football/teams/55.png',
+    shortName: 'BIR',
+    jerseyColors: { primary: '#0033A0', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'St Andrew’s'
+  },
+  'Blackpool': {
+    logo: 'https://media.api-sports.io/football/teams/61.png',
+    shortName: 'BPL',
+    jerseyColors: { primary: '#F96400', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Bloomfield Road'
+  },
+  'Bolton Wanderers': {
+    logo: 'https://media.api-sports.io/football/teams/63.png',
+    shortName: 'BOL',
+    jerseyColors: { primary: '#FFFFFF', secondary: '#001F5B' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Toughsheet Community Stadium'
+  },
+  'Bristol Rovers': {
+    logo: 'https://media.api-sports.io/football/teams/445.png',
+    shortName: 'BRR',
+    jerseyColors: { primary: '#005AA7', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Memorial Stadium'
+  },
+  'Burton Albion': {
+    logo: 'https://media.api-sports.io/football/teams/4458.png',
+    shortName: 'BUR',
+    jerseyColors: { primary: '#FFF200', secondary: '#000000' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Pirelli Stadium'
+  },
+  'Cambridge United': {
+    logo: 'https://media.api-sports.io/football/teams/4453.png',
+    shortName: 'CAM',
+    jerseyColors: { primary: '#FFCC00', secondary: '#000000' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Abbey Stadium'
+  },
+  'Charlton Athletic': {
+    logo: 'https://media.api-sports.io/football/teams/62.png',
+    shortName: 'CHA',
+    jerseyColors: { primary: '#E4002B', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'The Valley'
+  },
+  'Cheltenham Town': {
+    logo: 'https://media.api-sports.io/football/teams/1900.png',
+    shortName: 'CHT',
+    jerseyColors: { primary: '#D71920', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Completely-Suzuki Stadium'
+  },
+  'Derby County': {
+    logo: 'https://media.api-sports.io/football/teams/60.png',
+    shortName: 'DER',
+    jerseyColors: { primary: '#FFFFFF', secondary: '#000000' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Pride Park'
+  },
+  'Exeter City': {
+    logo: 'https://media.api-sports.io/football/teams/451.png',
+    shortName: 'EXE',
+    jerseyColors: { primary: '#DA1212', secondary: '#000000' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'St James Park'
+  },
+  'Fleetwood Town': {
+    logo: 'https://media.api-sports.io/football/teams/1933.png',
+    shortName: 'FLE',
+    jerseyColors: { primary: '#D71920', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Highbury Stadium'
+  },
+  'Huddersfield Town': {
+    logo: 'https://media.api-sports.io/football/teams/59.png',
+    shortName: 'HUD',
+    jerseyColors: { primary: '#0074B7', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'John Smith’s Stadium'
+  },
+  'Leyton Orient': {
+    logo: 'https://media.api-sports.io/football/teams/440.png',
+    shortName: 'LEY',
+    jerseyColors: { primary: '#E30613', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Brisbane Road'
+  },
+  'Lincoln City': {
+    logo: 'https://media.api-sports.io/football/teams/442.png',
+    shortName: 'LIN',
+    jerseyColors: { primary: '#C70000', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'LNER Stadium'
+  },
+  'Northampton Town': {
+    logo: 'https://media.api-sports.io/football/teams/454.png',
+    shortName: 'NOR',
+    jerseyColors: { primary: '#6A1B1A', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Sixfields Stadium'
+  },
+  'Oxford United': {
+    logo: 'https://media.api-sports.io/football/teams/61.png',
+    shortName: 'OXF',
+    jerseyColors: { primary: '#FCD116', secondary: '#002147' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Kassam Stadium'
+  },
+  'Peterborough United': {
+    logo: 'https://media.api-sports.io/football/teams/63.png',
+    shortName: 'PET',
+    jerseyColors: { primary: '#0057B8', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'London Road'
+  },
+  'Portsmouth': {
+    logo: 'https://media.api-sports.io/football/teams/59.png',
+    shortName: 'POR',
+    jerseyColors: { primary: '#0050A4', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Fratton Park'
+  },
+  'Port Vale': {
+    logo: 'https://media.api-sports.io/football/teams/4456.png',
+    shortName: 'PVL',
+    jerseyColors: { primary: '#FFFFFF', secondary: '#000000' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Vale Park'
+  },
+  'Reading': {
+    logo: 'https://media.api-sports.io/football/teams/59.png',
+    shortName: 'REA',
+    jerseyColors: { primary: '#0033A0', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Select Car Leasing Stadium'
+  },
+  'Shrewsbury Town': {
+    logo: 'https://media.api-sports.io/football/teams/4455.png',
+    shortName: 'SHR',
+    jerseyColors: { primary: '#005EB8', secondary: '#FFD200' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Montgomery Waters Meadow'
+  },
+  'Stevenage': {
+    logo: 'https://media.api-sports.io/football/teams/443.png',
+    shortName: 'STE',
+    jerseyColors: { primary: '#C90C0F', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Lamex Stadium'
+  },
+  'Wigan Athletic': {
+    logo: 'https://media.api-sports.io/football/teams/62.png',
+    shortName: 'WIG',
+    jerseyColors: { primary: '#0054A6', secondary: '#FFFFFF' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'DW Stadium'
+  },
+  'Wycombe Wanderers': {
+    logo: 'https://media.api-sports.io/football/teams/4454.png',
+    shortName: 'WYC',
+    jerseyColors: { primary: '#0E4C92', secondary: '#96C6EB' },
+    country: 'England',
+    league: League.LeagueOne,
+    venue: 'Adams Park'
   }
 };
 
