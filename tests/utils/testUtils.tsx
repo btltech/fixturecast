@@ -1,6 +1,7 @@
 import React, { ReactElement } from 'react';
-import { render, RenderOptions } from '@testing-library/react';
-import { vi } from 'vitest';
+import { render, RenderOptions, fireEvent } from '@testing-library/react';
+import { vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { AppProvider } from '../../contexts/AppContext';
 
 // Mock all API services to prevent real network calls
@@ -122,43 +123,166 @@ export const mockNews = [
   },
 ];
 
-export const mockAppContextValue = {
-  // Data
+type AppContextShape = ReturnType<typeof createMockAppContextValue>;
+
+const createAccuracyStats = () => ({
+  totalPredictions: 1,
+  correctOutcomes: 1,
+  correctScorelines: 0,
+  correctBtts: 0,
+  correctGoalLine: 0,
+  correctHtft: 0,
+  correctScoreRange: 0,
+  correctFirstGoalscorer: 0,
+  correctCleanSheet: 0,
+  correctCorners: 0,
+  recentAccuracy: { last10: 70, last20: 68, last50: 65 },
+  overallAccuracy: 70,
+  verifiedPredictions: 1,
+});
+
+const createMockAppContextValue = () => ({
   fixtures: mockFixtures,
   teams: mockTeams,
+  pastPredictions: [],
   leagueTables: mockLeagueTables,
-  news: mockNews,
-  predictions: { [mockMatch.id]: mockPrediction },
-  
-  // State
+  fixtureError: null,
+  favoriteTeams: ['Manchester United'],
+  favoriteLeagues: [],
+  alerts: [],
+  toasts: [],
   isLoading: false,
-  error: null,
+  unreadAlertsCount: 0,
+  apiUsage: { callsUsed: 0, callsRemaining: 1000, percentageUsed: 0 },
   lastUpdated: { fixtures: Date.now() },
-  
-  // Actions
+  accuracyRecords: [],
+  accuracyStats: createAccuracyStats(),
+  liveMatches: [],
+  liveMatchUpdates: {},
+  teamCache: {},
+  todaysFixturesWithPredictions: mockFixtures.map(match => ({ match, prediction: mockPrediction, loading: false })),
+  onSelectPrediction: vi.fn(),
+  loadInitialData: vi.fn(),
+  refreshRealTimeData: vi.fn(),
+  addToast: vi.fn(),
+  fetchPrediction: vi.fn().mockResolvedValue(mockPrediction),
+  getPrediction: vi.fn(() => mockPrediction),
+  toggleFavoriteTeam: vi.fn(),
+  toggleFavoriteLeague: vi.fn(),
+  addAlert: vi.fn(),
+  markAlertsAsRead: vi.fn(),
+  loadLeagueTable: vi.fn(),
+  recordPredictionAccuracy: vi.fn(),
+  getAccuracyDisplay: vi.fn(() => '70% overall accuracy'),
+  generateTodaysPredictions: vi.fn().mockResolvedValue({ success: 1, failed: 0, total: 1 }),
+  getLiveAccuracyStats: vi.fn(() => createAccuracyStats()),
+  fetchLiveMatches: vi.fn(),
+  getLiveMatch: vi.fn(() => null),
+  updateLiveMatches: vi.fn(),
+  updateDailyPredictions: vi.fn(),
+  loadLeagueFixtures: vi.fn(),
+  getTeamForm: vi.fn(() => ({
+    overall: {
+      teamId: 1,
+      teamName: 'Manchester United',
+      last10Results: ['W', 'D', 'L', 'W', 'W'],
+      homeForm: ['W', 'W', 'D'],
+      awayForm: ['L', 'W'],
+      formTrend: 'improving',
+      pointsLast10: 15,
+      goalsFor: 18,
+      goalsAgainst: 10,
+      cleanSheets: 3,
+      lastUpdated: new Date().toISOString(),
+    },
+    home: {
+      teamId: 1,
+      teamName: 'Manchester United',
+      last10Results: ['W', 'W', 'D', 'W'],
+      homeForm: ['W', 'W', 'D', 'W'],
+      awayForm: ['L', 'W'],
+      formTrend: 'stable',
+      pointsLast10: 12,
+      goalsFor: 10,
+      goalsAgainst: 4,
+      cleanSheets: 2,
+      lastUpdated: new Date().toISOString(),
+    },
+    away: {
+      teamId: 1,
+      teamName: 'Manchester United',
+      last10Results: ['L', 'W', 'D', 'L'],
+      homeForm: ['W', 'W', 'D'],
+      awayForm: ['L', 'W', 'L', 'D'],
+      formTrend: 'declining',
+      pointsLast10: 6,
+      goalsFor: 8,
+      goalsAgainst: 12,
+      cleanSheets: 1,
+      lastUpdated: new Date().toISOString(),
+    },
+    trend: {
+      direction: 'up',
+      strength: 60,
+      description: 'Improving',
+    },
+  })),
+  getCachedTeamData: vi.fn(() => null),
+  setCachedTeamData: vi.fn(),
+  clearTeamCache: vi.fn(),
+  getTeamDetails: vi.fn().mockResolvedValue(mockTeam),
+  refreshTeamDetails: vi.fn(),
+  refreshAllTeamDetails: vi.fn(),
+  getTeamDataStatus: vi.fn(() => ({ totalTeams: 2, cachedComplete: 2, percentageComplete: 100, needsRefresh: 0 })),
+  news: mockNews,
   refetchFixtures: vi.fn(),
   refetchTeams: vi.fn(),
   refetchLeagueTables: vi.fn(),
   refetchNews: vi.fn(),
-  generatePrediction: vi.fn(),
+  generatePrediction: vi.fn().mockResolvedValue(mockPrediction),
   clearError: vi.fn(),
+  error: null,
+});
+
+let mockAppContextValue: AppContextShape = createMockAppContextValue();
+
+export const resetMockAppContextValue = () => {
+  mockAppContextValue = createMockAppContextValue();
 };
+
+export const setMockAppContextValue = (overrides: Partial<AppContextShape>) => {
+  mockAppContextValue = {
+    ...mockAppContextValue,
+    ...overrides,
+    fixtureError: overrides.fixtureError ?? mockAppContextValue.fixtureError,
+  };
+};
+
+export { mockAppContextValue };
 
 // Mock the AppProvider to prevent context errors
 vi.mock('../../contexts/AppContext', () => ({
-  AppProvider: ({ children }: { children: React.ReactNode }) => children,
+  AppProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useAppContext: () => mockAppContextValue,
 }));
 
-// Custom render function that includes providers
-const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
-  return <>{children}</>;
-};
+beforeEach(() => {
+  resetMockAppContextValue();
+});
 
-const customRender = (
-  ui: ReactElement,
-  options?: Omit<RenderOptions, 'wrapper'>
-) => render(ui, { wrapper: AllTheProviders, ...options });
+const TestProviders = ({ children }: { children: React.ReactNode }) => (
+  <AppProvider value={mockAppContextValue}>
+    <MemoryRouter>{children}</MemoryRouter>
+  </AppProvider>
+);
+
+const customRender = (ui: ReactElement, options: RenderOptions = {}) =>
+  render(ui, { wrapper: TestProviders, ...options });
 
 export * from '@testing-library/react';
-export { customRender as render };
+export { customRender as render, within };
+
+export const openSearchModal = () => {
+  fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+  fireEvent.keyDown(window, { key: 'k', metaKey: true });
+};

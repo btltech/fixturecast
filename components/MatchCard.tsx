@@ -92,14 +92,33 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onSelectMatch, onSelectTea
     );
   };
 
+  const matchLabel = `${homeTeam} vs ${awayTeam}`;
+  const predictedScoreline = prediction?.predictedScoreline ?? null;
+  const liveMinuteLabel = match.status === 'LIVE' && (match as any)?.minute != null
+    ? `${(match as any).minute}'`
+    : null;
+  const errorMessage = match.status === 'ERROR' ? match.errorMessage ?? 'Failed to load fixtures' : null;
+
   return (
     <div
       onClick={() => onSelectMatch(match)}
       className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-blue-500/20 border border-gray-700 hover:border-blue-600 transition-all duration-300 transform hover:-translate-y-1 cursor-pointer flex flex-col"
+      role="button"
+      aria-label={matchLabel}
+      tabIndex={0}
+      data-testid="match-card"
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelectMatch(match);
+        }
+      }}
     >
       <div className="p-3 sm:p-4 bg-gray-900/50">
         <p className="text-xs sm:text-sm font-semibold text-blue-400 text-center">{league}</p>
-        <p className="text-xs text-gray-400 text-center">{dateString} - {timeString}</p>
+        <p className="text-xs text-gray-400 text-center" data-testid="match-time">
+          {dateString} - {timeString}
+        </p>
       </div>
       <div className="p-3 sm:p-5 flex items-center justify-around flex-grow">
         <div className="flex flex-col items-center justify-between space-y-2 w-1/3 h-full">
@@ -118,6 +137,11 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onSelectMatch, onSelectTea
               showTrend={true} 
               size="sm" 
             />
+            {liveMinuteLabel && (
+              <span className="block text-xs text-red-400 font-semibold" data-testid="live-minute">
+                LIVE · {liveMinuteLabel}
+              </span>
+            )}
           </div>
           <button
             onClick={(e) => handleFavoriteClick(e, homeTeam)}
@@ -127,7 +151,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onSelectMatch, onSelectTea
             ★
           </button>
         </div>
-        <div className="text-4xl font-bold text-gray-400">vs</div>
+        <div className="text-4xl font-bold text-gray-400" data-testid="match-label">vs</div>
         <div className="flex flex-col items-center justify-between space-y-2 w-1/3 h-full">
           <TeamLogo teamName={awayTeam} size="medium" showJerseyColors={true} clickable={true} onClick={() => onSelectTeam(awayTeam)} />
           <h3 
@@ -156,6 +180,11 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onSelectMatch, onSelectTea
       </div>
       <div className="px-5 pb-4 mt-auto border-t border-gray-700/50 pt-3">
         {renderPredictionBar()}
+        {predictedScoreline && (
+          <p className="text-sm text-center text-gray-200 font-semibold" data-testid="predicted-scoreline">
+            {predictedScoreline}
+          </p>
+        )}
         {renderPredictionSummary()}
         {prediction && (
           <div className="mt-3 flex justify-center">
@@ -172,6 +201,23 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onSelectMatch, onSelectTea
               showTooltip={true}
             />
           </div>
+        )}
+        {prediction && (
+          <div className="mt-3 flex justify-center">
+            <button
+              type="button"
+              className="text-sm font-semibold text-blue-300 hover:text-blue-100 underline"
+              onClick={() => onSelectMatch(match)}
+              data-testid="prediction-view-details"
+            >
+              View Details
+            </button>
+          </div>
+        )}
+        {errorMessage && (
+          <p className="mt-3 text-center text-red-400 text-xs" data-testid="match-error">
+            {errorMessage}
+          </p>
         )}
       </div>
       

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import TeamLogo from './TeamLogo';
 import LoadingSpinner from './LoadingSpinner';
+import SyncStatusIndicator from './SyncStatusIndicator';
 import { Prediction } from '../types';
 
 const TodaysPredictions: React.FC = () => {
@@ -16,6 +17,7 @@ const TodaysPredictions: React.FC = () => {
   } = useAppContext();
 
   const [generating, setGenerating] = React.useState(false);
+  const [expandedPredictions, setExpandedPredictions] = useState<Set<string>>(new Set());
 
   const handleGenerateMissing = async () => {
     try {
@@ -50,6 +52,20 @@ const TodaysPredictions: React.FC = () => {
     return homeLeague || awayLeague || 'League unknown';
   };
 
+  const togglePredictionExpansion = (matchId: string) => {
+    setExpandedPredictions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(matchId)) {
+        newSet.delete(matchId);
+      } else {
+        newSet.add(matchId);
+      }
+      return newSet;
+    });
+  };
+
+  const isExpanded = (matchId: string) => expandedPredictions.has(matchId);
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100">
       <div className="container mx-auto px-4 py-6">
@@ -57,6 +73,9 @@ const TodaysPredictions: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold text-white">Today&apos;s Predictions</h1>
             <p className="text-gray-400 mt-1">Matches scheduled for today with available predictions. Generate missing ones on demand.</p>
+            <div className="mt-2">
+              <SyncStatusIndicator showDetails={true} />
+            </div>
           </div>
 
           <button
@@ -134,28 +153,212 @@ const TodaysPredictions: React.FC = () => {
                 <div className="mt-4 bg-gray-800/60 rounded-lg p-4 space-y-2">
                   {prediction ? (
                     <>
-                      <div className="flex items-center justify-between text-sm text-gray-400 uppercase tracking-wide">
-                        <span>Predicted Outcome</span>
-                        {prediction.predictedScoreline && (
-                          <span className="text-blue-300">Scoreline: {prediction.predictedScoreline}</span>
+                      <div 
+                        className="cursor-pointer hover:bg-gray-700/50 rounded-lg p-2 transition-colors"
+                        onClick={() => togglePredictionExpansion(match.id)}
+                      >
+                        <div className="flex items-center justify-between text-sm text-gray-400 uppercase tracking-wide">
+                          <span>Predicted Outcome</span>
+                          <div className="flex items-center space-x-2">
+                            {prediction.predictedScoreline && (
+                              <span className="text-blue-300">Scoreline: {prediction.predictedScoreline}</span>
+                            )}
+                            <span className="text-xs text-gray-500">
+                              {isExpanded(match.id) ? '▼ Click to collapse' : '▶ Click to expand details'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-white text-sm mt-2">
+                          <div className="bg-blue-900/30 rounded-lg p-3 text-center">
+                            <div className="text-xs text-gray-300 uppercase">Home</div>
+                            <div className="text-xl font-bold">{prediction.homeWinProbability}%</div>
+                          </div>
+                          <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-xs text-gray-300 uppercase">Draw</div>
+                            <div className="text-xl font-bold">{prediction.drawProbability}%</div>
+                          </div>
+                          <div className="bg-blue-900/30 rounded-lg p-3 text-center">
+                            <div className="text-xs text-gray-300 uppercase">Away</div>
+                            <div className="text-xl font-bold">{prediction.awayWinProbability}%</div>
+                          </div>
+                        </div>
+                        {prediction.confidence && (
+                          <div className="text-xs text-gray-400 mt-2">Confidence: {prediction.confidence}</div>
                         )}
                       </div>
-                      <div className="grid grid-cols-3 gap-3 text-white text-sm">
-                        <div className="bg-blue-900/30 rounded-lg p-3 text-center">
-                          <div className="text-xs text-gray-300 uppercase">Home</div>
-                          <div className="text-xl font-bold">{prediction.homeWinProbability}%</div>
+
+                      {/* Detailed Prediction View */}
+                      {isExpanded(match.id) && (
+                        <div className="mt-4 bg-gray-900/80 rounded-lg p-4 space-y-4 border border-gray-600">
+                          <h3 className="text-lg font-semibold text-white mb-3">Detailed Prediction Analysis</h3>
+                          
+                          {/* Key Factors */}
+                          {prediction.keyFactors && prediction.keyFactors.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-blue-300 mb-2">Key Factors</h4>
+                              <div className="space-y-2">
+                                {prediction.keyFactors.map((factor, index) => (
+                                  <div key={index} className="bg-gray-800/50 rounded p-2 text-sm">
+                                    <div className="font-medium text-white">{factor.factor}</div>
+                                    <div className="text-gray-300">{factor.impact}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Goal Line Prediction */}
+                          {prediction.goalLine && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-green-300 mb-2">Goal Line Prediction</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white">Over/Under {prediction.goalLine.line}</span>
+                                  <span className="text-green-300 font-bold">{prediction.goalLine.probability}%</span>
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">{prediction.goalLine.reasoning}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* BTTS Prediction */}
+                          {prediction.btts && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-yellow-300 mb-2">Both Teams to Score</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white">{prediction.btts.prediction ? 'Yes' : 'No'}</span>
+                                  <span className="text-yellow-300 font-bold">{prediction.btts.probability}%</span>
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">{prediction.btts.reasoning}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* HT/FT Prediction */}
+                          {prediction.htft && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-purple-300 mb-2">Half Time / Full Time</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white">{prediction.htft.prediction}</span>
+                                  <span className="text-purple-300 font-bold">{prediction.htft.probability}%</span>
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">{prediction.htft.reasoning}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Score Range */}
+                          {prediction.scoreRange && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-orange-300 mb-2">Score Range</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white">{prediction.scoreRange.range}</span>
+                                  <span className="text-orange-300 font-bold">{prediction.scoreRange.probability}%</span>
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">{prediction.scoreRange.reasoning}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* First Goalscorer */}
+                          {prediction.firstGoalscorer && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-pink-300 mb-2">First Goalscorer</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white">{prediction.firstGoalscorer.player}</span>
+                                  <span className="text-pink-300 font-bold">{prediction.firstGoalscorer.probability}%</span>
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">{prediction.firstGoalscorer.reasoning}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Clean Sheet */}
+                          {prediction.cleanSheet && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-cyan-300 mb-2">Clean Sheet</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white">{prediction.cleanSheet.team} - {prediction.cleanSheet.prediction ? 'Yes' : 'No'}</span>
+                                  <span className="text-cyan-300 font-bold">{prediction.cleanSheet.probability}%</span>
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">{prediction.cleanSheet.reasoning}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Corners */}
+                          {prediction.corners && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-indigo-300 mb-2">Corners</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white">{prediction.corners.prediction}</span>
+                                  <span className="text-indigo-300 font-bold">{prediction.corners.probability}%</span>
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">{prediction.corners.reasoning}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Expected Goals */}
+                          {prediction.expectedGoals && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-emerald-300 mb-2">Expected Goals</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="grid grid-cols-2 gap-4 text-center">
+                                  <div>
+                                    <div className="text-xs text-gray-400">Home xG</div>
+                                    <div className="text-emerald-300 font-bold">{prediction.expectedGoals.home}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-gray-400">Away xG</div>
+                                    <div className="text-emerald-300 font-bold">{prediction.expectedGoals.away}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Confidence Details */}
+                          {prediction.confidencePercentage && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-blue-300 mb-2">Confidence Analysis</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="flex justify-between items-center mb-2">
+                                  <span className="text-white">Confidence Level</span>
+                                  <span className="text-blue-300 font-bold">{prediction.confidencePercentage}%</span>
+                                </div>
+                                {prediction.confidenceReason && (
+                                  <div className="text-xs text-gray-400">{prediction.confidenceReason}</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Uncertainty Metrics */}
+                          {prediction.uncertaintyMetrics && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-red-300 mb-2">Uncertainty Analysis</h4>
+                              <div className="bg-gray-800/50 rounded p-3">
+                                <div className="grid grid-cols-2 gap-4 text-center">
+                                  <div>
+                                    <div className="text-xs text-gray-400">Variance</div>
+                                    <div className="text-red-300 font-bold">{prediction.uncertaintyMetrics.variance}%</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-gray-400">Risk Level</div>
+                                    <div className="text-red-300 font-bold">{prediction.uncertaintyMetrics.riskLevel}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                          <div className="text-xs text-gray-300 uppercase">Draw</div>
-                          <div className="text-xl font-bold">{prediction.drawProbability}%</div>
-                        </div>
-                        <div className="bg-blue-900/30 rounded-lg p-3 text-center">
-                          <div className="text-xs text-gray-300 uppercase">Away</div>
-                          <div className="text-xl font-bold">{prediction.awayWinProbability}%</div>
-                        </div>
-                      </div>
-                      {prediction.confidence && (
-                        <div className="text-xs text-gray-400">Confidence: {prediction.confidence}</div>
                       )}
                     </>
                   ) : (

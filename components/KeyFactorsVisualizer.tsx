@@ -68,7 +68,7 @@ const KeyFactorsVisualizer: React.FC<KeyFactorsVisualizerProps> = ({ factors }) 
         <div key={index} className="bg-gray-800/60 p-4 rounded-lg">
           <h4 className="font-semibold text-gray-200 mb-3 border-b border-gray-700 pb-2">{factorGroup.category}</h4>
           <div className="space-y-3">
-            {factorGroup.points.map((point, pIndex) => {
+            {(factorGroup.points ?? []).map((point, pIndex) => {
               const { icon, color } = getVisualForFactor(point);
               return (
                 <div key={pIndex} className="flex items-start space-x-3">

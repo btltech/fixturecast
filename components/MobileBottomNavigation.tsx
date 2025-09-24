@@ -14,13 +14,14 @@ const MobileBottomNavigation: React.FC = () => {
     { path: '/', icon: '🏠', label: 'Home' },
     { path: '/fixtures', icon: '📅', label: 'Fixtures' },
     { path: '/my-teams', icon: '⭐', label: 'Teams' },
+    { path: '/accuracy', icon: '📊', label: 'Accuracy' },
     { path: '/news', icon: '📰', label: 'News' }
   ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-gray-800/95 backdrop-blur-lg border-t border-gray-700 z-50 pb-safe">
       <div className="flex items-center justify-around h-16 px-2">
-        {navItems.map((item) => (
+    {navItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
@@ -29,6 +30,7 @@ const MobileBottomNavigation: React.FC = () => {
                 ? 'text-blue-400 bg-blue-500/10'
                 : 'text-gray-400 hover:text-gray-200'
             }`}
+        data-testid={`nav-link-${item.label}`}
           >
             <span className="text-xl mb-1">{item.icon}</span>
             <span className="text-xs font-medium">{item.label}</span>

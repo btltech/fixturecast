@@ -1,8 +1,9 @@
-import React, { Suspense } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
+import React, { Suspense, useMemo } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { View } from './types';
 import LoadingSpinner from './components/LoadingSpinner';
 import MobileBottomNavigation from './components/MobileBottomNavigation';
+import EnhancedNavigation from './components/EnhancedNavigation';
 import { useAppContext } from './contexts/AppContext';
 
 // Lazy load components for code splitting
@@ -15,11 +16,11 @@ const MyTeams = React.lazy(() => import('./components/MyTeams'));
 const News = React.lazy(() => import('./components/News'));
 const PredictionDetail = React.lazy(() => import('./components/PredictionDetail'));
 const TodaysPredictions = React.lazy(() => import('./components/TodaysPredictions'));
+const AccuracyDashboard = React.lazy(() => import('./components/AccuracyDashboard'));
 
 // Wrapper component to handle navigation and provide router context
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { isLoading } = useAppContext();
   const [selectedLeagueFilter, setSelectedLeagueFilter] = React.useState<'all' | any>('all');
 
@@ -53,6 +54,9 @@ const AppContent: React.FC = () => {
         break;
       case View.News:
         navigate('/news');
+        break;
+      case View.Accuracy:
+        navigate('/accuracy');
         break;
       default:
         navigate('/');
@@ -147,6 +151,12 @@ const AppContent: React.FC = () => {
         element={<TodaysPredictions />}
       />
 
+      {/* Accuracy Dashboard */}
+      <Route
+        path="/accuracy"
+        element={<AccuracyDashboard />}
+      />
+
       {/* Catch-all route - redirect to dashboard */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -154,79 +164,45 @@ const AppContent: React.FC = () => {
 };
 
 // Navigation component with active state detection
-const Navigation: React.FC = () => {
+const App: React.FC = () => {
+  const navigate = useNavigate();
   const location = useLocation();
 
-  const isActive = (path: string) => {
-    if (path === '/' && location.pathname === '/') return true;
-    if (path !== '/' && location.pathname.startsWith(path)) return true;
-    return false;
-  };
+  const currentView = useMemo(() => {
+    if (location.pathname.startsWith('/fixtures')) return View.Fixtures;
+    if (location.pathname.startsWith('/my-teams')) return View.MyTeams;
+    if (location.pathname.startsWith('/news')) return View.News;
+    if (location.pathname.startsWith('/predictions')) return View.Predictions;
+    if (location.pathname.startsWith('/accuracy')) return View.Accuracy;
+    return View.Dashboard;
+  }, [location.pathname]);
 
-  return (
-    <nav className="bg-gray-800 py-6 hidden md:block">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-center items-center gap-6 flex-wrap">
-          <Link
-            to="/"
-            className={`px-8 py-4 text-lg font-semibold rounded-lg transition-all duration-200 ${
-              isActive('/')
-                ? 'bg-blue-600 text-white shadow-lg transform scale-105'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white hover:shadow-md'
-            }`}
-          >
-            Dashboard
-          </Link>
-          <Link
-            to="/fixtures"
-            className={`px-8 py-4 text-lg font-semibold rounded-lg transition-all duration-200 ${
-              isActive('/fixtures')
-                ? 'bg-blue-600 text-white shadow-lg transform scale-105'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white hover:shadow-md'
-            }`}
-          >
-            Fixtures
-          </Link>
-          <Link
-            to="/my-teams"
-            className={`px-8 py-4 text-lg font-semibold rounded-lg transition-all duration-200 ${
-              isActive('/my-teams')
-                ? 'bg-blue-600 text-white shadow-lg transform scale-105'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white hover:shadow-md'
-            }`}
-          >
-            My Teams
-          </Link>
-          <Link
-            to="/news"
-            className={`px-8 py-4 text-lg font-semibold rounded-lg transition-all duration-200 ${
-              isActive('/news')
-                ? 'bg-blue-600 text-white shadow-lg transform scale-105'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white hover:shadow-md'
-            }`}
-          >
-            News
-          </Link>
-          <Link
-            to="/predictions"
-            className={`px-8 py-4 text-lg font-semibold rounded-lg transition-all duration-200 ${
-              isActive('/predictions')
-                ? 'bg-blue-600 text-white shadow-lg transform scale-105'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white hover:shadow-md'
-            }`}
-          >
-            Today&apos;s Predictions
-          </Link>
-        </div>
-      </div>
-    </nav>
-  );
-};
-
-const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex flex-col">
-      <Navigation />
+      <EnhancedNavigation
+        onNavigate={(view) => {
+          switch (view) {
+            case View.Dashboard:
+              navigate('/');
+              break;
+            case View.Fixtures:
+              navigate('/fixtures');
+              break;
+            case View.MyTeams:
+              navigate('/my-teams');
+              break;
+            case View.News:
+              navigate('/news');
+              break;
+            case View.Accuracy:
+              navigate('/accuracy');
+              break;
+            default:
+              navigate('/');
+          }
+        }}
+        currentView={currentView}
+      />
       <main className="flex-grow container mx-auto px-4 py-8 pb-20 md:pb-8">
         <Suspense fallback={<div className="flex justify-center items-center h-64"><LoadingSpinner /></div>}>
           <AppContent />

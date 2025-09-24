@@ -60,6 +60,14 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({
       icon: '⭐',
       description: 'Your favorite teams and alerts',
       badge: unreadAlertsCount > 0 ? `${unreadAlertsCount}` : undefined
+    },
+    {
+      id: View.Accuracy,
+      label: 'Accuracy',
+      icon: '📊',
+      description: 'Prediction accuracy tracking and analytics',
+      badge: 'New',
+      isNew: true
     }
   ];
 
@@ -193,6 +201,7 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({
                     : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
                 }`}
                 title={item.description}
+                data-testid={`nav-link-${item.label}`}
               >
                 <span className="flex items-center space-x-2">
                   <span className="text-lg">{item.icon}</span>
@@ -222,6 +231,7 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({
               onClick={() => setIsSearchOpen(true)}
               className="p-2 text-gray-300 hover:text-white transition-colors duration-200 rounded-lg hover:bg-gray-700/50"
               title="Search (Ctrl+K)"
+              data-testid="nav-search-button"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -372,7 +382,7 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({
 
       {/* Search Modal */}
       {isSearchOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-20">
+        <div data-testid="global-search-modal" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-20">
           <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4">
             <div className="p-4 border-b border-gray-700">
               <div className="flex items-center space-x-3">
@@ -391,7 +401,7 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({
                       setSearchQuery('');
                     }
                   }}
-                  placeholder="Search teams, leagues, matches..."
+                  placeholder="Search for teams, leagues or matches"
                   className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none"
                   autoFocus
                 />

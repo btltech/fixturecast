@@ -15,6 +15,7 @@ import ConfidenceOverview from './ConfidenceOverview';
 import FormTrendsOverview from './FormTrendsOverview';
 import DeploymentStatus from './DeploymentStatus';
 import PerformanceDashboard from './PerformanceDashboard';
+import LoadingSpinner from './LoadingSpinner';
 
 interface DashboardProps {
   onSelectMatch: (match: Match) => void;
@@ -95,7 +96,7 @@ const Countdown: React.FC<{ targetDate: Date }> = ({ targetDate }) => {
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navigateToFixtures, setSelectedLeagueFilter, onSelectPrediction }) => {
-  const { fixtures, teams, leagueTables, favoriteTeams, toggleFavoriteTeam, lastUpdated, refreshRealTimeData, accuracyStats, getAccuracyDisplay, liveMatches, fetchLiveMatches, getPrediction, loadLeagueFixtures, loadLeagueTable, apiUsage, isLoading, getTeamDataStatus, refreshAllTeamDetails } = useAppContext();
+  const { fixtures, teams, leagueTables, favoriteTeams, toggleFavoriteTeam, lastUpdated, refreshRealTimeData, accuracyStats, getAccuracyDisplay, liveMatches, fetchLiveMatches, getPrediction, loadLeagueFixtures, loadLeagueTable, apiUsage, isLoading, getTeamDataStatus, refreshAllTeamDetails, fixtureError } = useAppContext();
   const navigate = useNavigate();
 
   // Debug: Log fixtures status
@@ -239,6 +240,42 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
           </div>
         </section>
       )}
+
+      {/* Quick Access to Accuracy Dashboard */}
+      <section className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-xl p-4 sm:p-6 shadow-2xl border border-blue-500/40">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <span className="text-2xl">📊</span>
+            <div>
+              <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-300">Prediction Accuracy</h2>
+              <p className="text-sm text-blue-200">Track and analyze prediction performance</p>
+            </div>
+            <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
+              New
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/accuracy')}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors duration-200 font-medium text-sm"
+          >
+            View Accuracy Dashboard
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gray-800/50 rounded-lg p-3">
+            <div className="text-2xl font-bold text-green-400">{accuracyStats.overallAccuracy.toFixed(1)}%</div>
+            <div className="text-xs text-gray-400">Overall Accuracy</div>
+          </div>
+          <div className="bg-gray-800/50 rounded-lg p-3">
+            <div className="text-2xl font-bold text-blue-400">{accuracyStats.totalPredictions}</div>
+            <div className="text-xs text-gray-400">Total Predictions</div>
+          </div>
+          <div className="bg-gray-800/50 rounded-lg p-3">
+            <div className="text-2xl font-bold text-purple-400">{accuracyStats.correctOutcomes}</div>
+            <div className="text-xs text-gray-400">Correct Outcomes</div>
+          </div>
+        </div>
+      </section>
 
       {/* Today's Champions League - pinned at the very top if present */}
       {todaysFixtures.some(m => m.league === League.ChampionsLeague) && (
@@ -530,21 +567,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
             );
           })}
         </div>
-        {/* Background Loading Indicator */}
-        {isLoading && (
-          <div className="mt-4 p-3 bg-blue-900/30 border border-blue-500/30 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-              <div className="text-sm text-blue-300">
-                Loading complete featured leagues data in background...
-              </div>
+        {isLoading ? (
+          <div data-testid="fixtures-loading" className="flex items-center justify-center py-8">
+            <div className="flex flex-col items-center space-y-3">
+              <LoadingSpinner size="large" />
+              <p className="text-sm text-gray-300">Loading complete featured leagues data</p>
             </div>
           </div>
+        ) : fixtureError ? (
+          <div data-testid="fixtures-error-message" className="flex items-center justify-center py-8">
+            <p className="text-red-400 text-center text-sm sm:text-base">
+              {fixtureError || 'Failed to load fixtures'}
+            </p>
+          </div>
+        ) : (
+          <p className="text-center text-gray-400 text-sm mt-4">
+            Click any league to view all upcoming games and fixtures for that competition.
+          </p>
         )}
-
-        <p className="text-center text-gray-400 text-sm mt-4">
-          Click any league to view all upcoming games and fixtures for that competition.
-        </p>
       </section>
 
       {/* Team Form Trends (moved below Featured Leagues) */}

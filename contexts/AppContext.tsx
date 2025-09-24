@@ -26,7 +26,9 @@ import {
     getRecentTeamForm,
     getTeamStats
 } from '../services/footballApiService';
-import { generatePredictionsForMatches } from '../services/predictionService';
+// // import { generatePredictionsForMatches } from '../services/predictionService';
+import { advancedPredictionSyncService } from '../services/advancedPredictionSyncService';
+import { resultCheckerService } from '../services/resultCheckerService';
 
 interface AppContextType {
     // State
@@ -48,6 +50,7 @@ interface AppContextType {
     liveMatchUpdates: { [matchId: string]: LiveMatchUpdate };
     teamCache: { [teamName: string]: { data: Team; timestamp: number; expiresAt: number } };
     todaysFixturesWithPredictions: { match: Match; prediction: Prediction | null; loading: boolean }[];
+    fixtureError: string | null;
 
     // Functions
     loadInitialData: () => void;
@@ -82,14 +85,14 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AppProvider: React.FC<{ children: ReactNode; value?: Partial<AppContextType> }> = ({ children, value }) => {
   try {
     const [appData, setAppData] = useState<AppData>({
         teams: {},
         fixtures: [],
-        pastPredictions: [],
         leagueTables: {},
     });
+    const [pastPredictions, setPastPredictions] = useState<PastPrediction[]>([]);
     const [favoriteTeams, setFavoriteTeams] = useState<string[]>(['Manchester City', 'Real Madrid']);
     // HARD-CODED FEATURED LEAGUES ONLY - NO OTHER LEAGUES ALLOWED
     const [favoriteLeagues, setFavoriteLeagues] = useState<League[]>([League.PremierLeague, League.LaLiga, League.SerieA, League.Championship]);
@@ -116,6 +119,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([]);
     const [liveMatchUpdates, setLiveMatchUpdates] = useState<{ [matchId: string]: LiveMatchUpdate }>({});
     const [teamCache, setTeamCache] = useState<{ [teamName: string]: { data: Team; timestamp: number; expiresAt: number } }>({});
+    const [fixtureError, setFixtureError] = useState<string | null>(null);
 
     // Keys for persistent caches
     const FIXTURES_CACHE_KEY = 'fixturecast_fixtures_cache_v1';
@@ -193,6 +197,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const loadInitialData = useCallback(async () => {
         setIsLoading(true);
+        setFixtureError(null);
         loadingStateService.setLoading('fixtures', true);
         loadingStateService.setLoading('teams', true);
         loadingStateService.setLoading('tables', true);
@@ -211,8 +216,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // Load past predictions from static file
             let pastPredictions: PastPrediction[] = [];
             try {
-                const pastPredictionsRes = await fetch('./data/past-predictions.json');
-                pastPredictions = await pastPredictionsRes.json();
+            const pastPredictionsRes = await fetch('./data/past-predictions.json');
+            pastPredictions = await pastPredictionsRes.json();
+            setPastPredictions(pastPredictions);
             } catch (error) {
                 console.warn("Could not load past predictions:", error);
             }
@@ -222,7 +228,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setAppData({ 
                 teams: knownTeams, 
                 fixtures: criticalFixtures, 
-                pastPredictions, 
                 leagueTables: {} 
             });
             setLastUpdated({ fixtures: Date.now() });
@@ -234,7 +239,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             console.log(`✅ AppContext: Successfully loaded ${criticalFixtures.length} fixtures, isLoading set to false`);
             
             // Load remaining data in background
-            setTimeout(() => loadRemainingData(criticalFixtures, knownTeams, pastPredictions), 1000);
+            setTimeout(() => loadRemainingData(criticalFixtures, knownTeams), 1000);
             
         } catch (error) {
             console.error("Failed to fetch initial data:", error);
@@ -402,7 +407,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // Load remaining data in background
     // Enhanced background loading for featured leagues
-    const loadRemainingData = async (existingFixtures: Match[], existingTeams: { [key: string]: Team }, pastPredictions: PastPrediction[]) => {
+    const loadRemainingData = async (existingFixtures: Match[], existingTeams: { [key: string]: Team }) => {
         try {
             // 🚀 PROFESSIONAL GRADE: Start comprehensive team details fetching immediately
             // This ensures ALL team information is available instantly when users click teams
@@ -645,6 +650,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             return predictionCache[match.id];
         }
 
+        // Try to get from advanced sync service first (cross-platform sync)
+        try {
+            const syncedPrediction = await advancedPredictionSyncService.getPrediction(match.id);
+            if (syncedPrediction) {
+                // Cache the synced prediction
+                setPredictionCache(prev => ({
+                    ...prev,
+                    [match.id]: syncedPrediction
+                }));
+                console.log(`✅ Retrieved synced prediction for ${match.homeTeam} vs ${match.awayTeam}`);
+                return syncedPrediction;
+            }
+        } catch (error) {
+            console.warn('Failed to get synced prediction:', error);
+        }
+
         // --- Start Enhanced Prediction Context ---
         const leagueId = getLeagueId(match.league);
         let homeTeamInjuries = [] as any[];
@@ -684,7 +705,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         const context = buildContextForMatch(
             match,
-            appData.pastPredictions,
+            pastPredictions,
             appData.leagueTables,
             h2hData || [],
             null, // homeTeamStats not available (can be added with getTeamStats)
@@ -764,9 +785,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 under: 50
             };
         }
+        // Store in advanced sync service (cross-platform sync)
+        try {
+            await advancedPredictionSyncService.storePrediction(match, newPrediction);
+            console.log(`✅ Prediction synced across platforms for ${match.homeTeam} vs ${match.awayTeam}`);
+        } catch (error) {
+            console.warn('Failed to sync prediction:', error);
+        }
+
         setPredictionCache(prev => ({ ...prev, [match.id]: newPrediction }));
         return newPrediction;
-    }, [predictionCache, appData.pastPredictions, appData.leagueTables]);
+    }, [predictionCache, pastPredictions, appData.leagueTables]);
 
     // Record prediction accuracy when actual results are available
     const recordPredictionAccuracy = useCallback((matchId: string, actualResult: { homeScore: number; awayScore: number }) => {
@@ -1053,11 +1082,85 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }));
   }, [appData.fixtures, predictionCache]);
 
-  const value = {
+    // Team cache management functions
+    const getCachedTeamData = useCallback((teamName: string): Team | null => {
+        const cached = teamCache[teamName];
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.data;
+        }
+        return null;
+    }, [teamCache]);
+
+    const setCachedTeamData = useCallback((teamName: string, teamData: Team) => {
+        setTeamCache(prev => ({
+            ...prev,
+            [teamName]: {
+                data: teamData,
+                timestamp: Date.now(),
+                expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+            }
+        }));
+    }, []);
+
+    const clearTeamCache = useCallback(() => {
+        setTeamCache({});
+    }, []);
+
+    const getTeamDetails = useCallback(async (teamName: string, forceRefresh?: boolean): Promise<Team | null> => {
+        if (!forceRefresh) {
+            const cached = getCachedTeamData(teamName);
+            if (cached) {
+                return cached;
+            }
+        }
+
+        try {
+            const { getTeamData } = await import('../services/teamDataService');
+            const teamData = await getTeamData(teamName);
+            if (teamData) {
+                setCachedTeamData(teamName, teamData);
+            }
+            return teamData;
+        } catch (error) {
+            console.error('Error fetching team details:', error);
+            return null;
+        }
+    }, [getCachedTeamData, setCachedTeamData]);
+
+    const refreshTeamDetails = useCallback(async (teamName: string): Promise<Team | null> => {
+        return getTeamDetails(teamName, true);
+    }, [getTeamDetails]);
+
+    const refreshAllTeamDetails = useCallback(async () => {
+        const teamNames = Object.keys(teamCache);
+        const promises = teamNames.map(teamName => refreshTeamDetails(teamName));
+        await Promise.all(promises);
+    }, [refreshTeamDetails, teamCache]);
+
+    const getTeamDataStatus = useCallback(() => {
+        const totalTeams = Object.keys(appData.teams).length;
+        const cachedComplete = Object.keys(teamCache).length;
+        const percentageComplete = totalTeams > 0 ? (cachedComplete / totalTeams) * 100 : 0;
+        const needsRefresh = Object.values(teamCache).filter(cached => cached.expiresAt <= Date.now()).length;
+
+        return {
+            totalTeams,
+            cachedComplete,
+            percentageComplete,
+            needsRefresh
+        };
+    }, [appData.teams, teamCache]);
+
+    const getTeamForm = useCallback((teamId: number, teamName: string): FormAnalysis => {
+        return getFormAnalysis(teamId, teamName);
+    }, []);
+
+
+  const baseContextValue: AppContextType = {
         // State
         teams: appData.teams,
         fixtures: appData.fixtures,
-        pastPredictions: appData.pastPredictions,
+        pastPredictions,
         leagueTables: appData.leagueTables,
         favoriteTeams,
         favoriteLeagues,
@@ -1070,10 +1173,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         accuracyRecords,
         accuracyStats,
         liveMatches,
-    liveMatchUpdates,
-    teamCache,
-    todaysFixturesWithPredictions,
-    // Functions
+        liveMatchUpdates,
+        teamCache,
+        todaysFixturesWithPredictions,
         loadInitialData,
         refreshRealTimeData,
         addToast,
@@ -1087,158 +1189,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         recordPredictionAccuracy,
         getAccuracyDisplay,
         generateTodaysPredictions,
-        getLiveAccuracyStats: getLiveAccuracyStatsCallback,
+        getLiveAccuracyStats,
         fetchLiveMatches,
         getLiveMatch,
         updateLiveMatches,
         updateDailyPredictions,
         loadLeagueFixtures,
-        getTeamForm: (teamId: number, teamName: string) => getFormAnalysis(teamId, teamName),
-        // Team cache management functions
-        getCachedTeamData: (teamName: string) => {
-            const cached = teamCache[teamName];
-            if (cached && cached.expiresAt > Date.now()) {
-                return cached.data;
-            }
-            return null;
-        },
-        setCachedTeamData: (teamName: string, teamData: Team) => {
-            const cacheEntry = {
-                data: teamData,
-                timestamp: Date.now(),
-                expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-            };
-            setTeamCache(prev => ({
-                ...prev,
-                [teamName]: cacheEntry
-            }));
-
-            // Persist to localStorage
-            if (hasLocalStorage) {
-                try {
-                    const existingCache = JSON.parse(localStorage.getItem(TEAM_CACHE_KEY) || '{}');
-                    existingCache[teamName] = cacheEntry;
-                    localStorage.setItem(TEAM_CACHE_KEY, JSON.stringify(existingCache));
-                } catch (error) {
-                    console.warn('Failed to persist team cache to localStorage:', error);
-                }
-            }
-        },
-        clearTeamCache: () => {
-            setTeamCache({});
-            if (hasLocalStorage) {
-                localStorage.removeItem(TEAM_CACHE_KEY);
-            }
-        },
-        getTeamDetails: async (teamName: string, forceRefresh: boolean = false) => {
-            // Check cache first (unless force refresh)
-            if (!forceRefresh) {
-                const cached = teamCache[teamName];
-                if (cached && cached.expiresAt > Date.now()) {
-                    // Using cached team data
-                    return cached.data;
-                }
-            }
-
-            // Fetch from API
-            // Fetching team data
-            try {
-                const { getTeamDetails: fetchTeamDetails } = await import('../services/footballApiService');
-                const teamData = await fetchTeamDetails(teamName);
-
-                if (teamData) {
-                    // Cache the result
-                    const cacheEntry = {
-                        data: teamData,
-                        timestamp: Date.now(),
-                        expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-                    };
-                    setTeamCache(prev => ({
-                        ...prev,
-                        [teamName]: cacheEntry
-                    }));
-
-                    // Persist to localStorage
-                    if (hasLocalStorage) {
-                        try {
-                            const existingCache = JSON.parse(localStorage.getItem(TEAM_CACHE_KEY) || '{}');
-                            existingCache[teamName] = cacheEntry;
-                            localStorage.setItem(TEAM_CACHE_KEY, JSON.stringify(existingCache));
-                        } catch (error) {
-                            console.warn('Failed to persist team cache to localStorage:', error);
-                        }
-                    }
-
-                    // Team data cached
-                    return teamData;
-                }
-            } catch (error) {
-                console.error(`❌ Failed to fetch team details for ${teamName}:`, error);
-            }
-
-            return null;
-        },
-        refreshTeamDetails: async (teamName: string) => {
-            // Manual refresh - force refresh by setting forceRefresh to true
-            try {
-                const { getTeamDetails: fetchTeamDetails } = await import('../services/footballApiService');
-                const teamData = await fetchTeamDetails(teamName);
-                return teamData;
-            } catch (error) {
-                console.error(`Failed to refresh team details for ${teamName}:`, error);
-                return null;
-            }
-        },
-        refreshAllTeamDetails: async () => {
-            // Refreshing all teams
-            const teamNames = Object.keys(appData.teams);
-            addToast(`Refreshing team details for ${teamNames.length} teams...`, "info");
-
-            let successCount = 0;
-            let failCount = 0;
-
-            for (const teamName of teamNames) {
-                try {
-                    const { getTeamDetails: fetchTeamDetails } = await import('../services/footballApiService');
-                    const result = await fetchTeamDetails(teamName);
-                    if (result) {
-                        successCount++;
-                    } else {
-                        failCount++;
-                    }
-                } catch (error) {
-                    failCount++;
-                    console.error(`Failed to refresh ${teamName}:`, error);
-                }
-
-                // Small delay to be API-friendly
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
-
-            if (failCount === 0) {
-                addToast(`All ${successCount} team details refreshed successfully!`, "success");
-            } else {
-                addToast(`${successCount} teams refreshed, ${failCount} failed`, "warning");
-            }
-        },
-        // Professional-grade data status
-        getTeamDataStatus: () => {
-            const teamNames = Object.keys(appData.teams);
-            const cachedTeams = teamNames.filter(name => {
-                const cached = teamCache[name];
-                return cached && cached.expiresAt > Date.now() && cached.data.squad && cached.data.seasonStats;
-            });
-
-            return {
-                totalTeams: teamNames.length,
-                cachedComplete: cachedTeams.length,
-                percentageComplete: teamNames.length > 0 ? Math.round((cachedTeams.length / teamNames.length) * 100) : 0,
-                needsRefresh: teamNames.length - cachedTeams.length
-            };
-        }
+        getTeamForm,
+        getCachedTeamData,
+        setCachedTeamData,
+        clearTeamCache,
+        getTeamDetails,
+        refreshTeamDetails,
+        refreshAllTeamDetails,
+        getTeamDataStatus,
+        fixtureError,
     };
 
-    return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+    const mergedValue = value ? { ...baseContextValue, ...value } : baseContextValue;
+
+    return (
+        <AppContext.Provider value={mergedValue}>
+            {children}
+        </AppContext.Provider>
+    );
   } catch (error) {
     console.error('🔴 Critical error in AppProvider:', error);
     return (

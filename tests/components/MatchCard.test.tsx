@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '../utils/testUtils';
+import { render, screen, fireEvent, waitFor, setMockAppContextValue } from '../utils/testUtils';
 import MatchCard from '../../components/MatchCard';
 import { mockMatch, mockPrediction } from '../utils/testUtils';
 
@@ -21,18 +21,23 @@ describe('MatchCard', () => {
     match: mockMatch,
     onSelectMatch: vi.fn(),
     onSelectTeam: vi.fn(),
-    prediction: mockPrediction,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setMockAppContextValue({
+      getPrediction: vi.fn(() => mockPrediction),
+      fetchPrediction: vi.fn().mockResolvedValue(mockPrediction),
+    });
   });
 
-  it('renders match information correctly', () => {
+  it('renders match information correctly', async () => {
     render(<MatchCard {...mockProps} />);
     
-    expect(screen.getByText('Manchester United')).toBeInTheDocument();
-    expect(screen.getByText('Liverpool')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Manchester United' })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('heading', { name: 'Liverpool' })).toBeInTheDocument();
     expect(screen.getByText('vs')).toBeInTheDocument();
   });
 
@@ -43,30 +48,36 @@ describe('MatchCard', () => {
     expect(screen.getByTestId('logo-Liverpool')).toBeInTheDocument();
   });
 
-  it('shows match time', () => {
+  it('shows match time', async () => {
     render(<MatchCard {...mockProps} />);
     
-    // Should display formatted time
-    expect(screen.getByText(/\d{2}:\d{2}/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/15:00/)).toBeInTheDocument();
+    });
   });
 
-  it('displays prediction when available and showPrediction is true', () => {
+  it('displays prediction when available and showPrediction is true', async () => {
     render(<MatchCard {...mockProps} />);
     
-    expect(screen.getByText('2-1')).toBeInTheDocument();
+    const scoreline = await screen.findByTestId('predicted-scoreline');
+    expect(scoreline).toHaveTextContent('2-1');
     expect(screen.getByTestId('probability-bar')).toBeInTheDocument();
+    expect(screen.getByText(/Medium/i)).toBeInTheDocument();
   });
 
-  it('does not display prediction when showPrediction is false', () => {
+  it('does not display prediction when getPrediction returns null', async () => {
+    setMockAppContextValue({ getPrediction: vi.fn(() => null) });
     render(<MatchCard {...mockProps} />);
     
-    expect(screen.queryByTestId('probability-bar')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByTestId('probability-bar')).not.toBeInTheDocument();
+    });
   });
 
   it('calls onSelectMatch when card is clicked', async () => {
     render(<MatchCard {...mockProps} />);
     
-    const card = screen.getByRole('article');
+    const card = await screen.findByTestId('match-card');
     fireEvent.click(card);
     
     await waitFor(() => {
@@ -77,7 +88,7 @@ describe('MatchCard', () => {
   it('calls onSelectTeam when team name is clicked', async () => {
     render(<MatchCard {...mockProps} />);
     
-    const homeTeam = screen.getByText('Manchester United');
+    const homeTeam = await screen.findByRole('heading', { name: 'Manchester United' });
     fireEvent.click(homeTeam);
     
     await waitFor(() => {
@@ -88,7 +99,7 @@ describe('MatchCard', () => {
   it('handles keyboard navigation', async () => {
     render(<MatchCard {...mockProps} />);
     
-    const card = screen.getByRole('article');
+    const card = await screen.findByTestId('match-card');
     fireEvent.keyDown(card, { key: 'Enter' });
     
     await waitFor(() => {
@@ -96,7 +107,7 @@ describe('MatchCard', () => {
     });
   });
 
-  it('displays live match indicators for live matches', () => {
+  it('displays live match indicators for live matches', async () => {
     const liveMatch = {
       ...mockMatch,
       status: 'LIVE',
@@ -105,23 +116,22 @@ describe('MatchCard', () => {
 
     render(<MatchCard {...mockProps} match={liveMatch} />);
     
-    // Check for live indicators - these might be in different elements
-    expect(screen.getByText('LIVE')).toBeInTheDocument();
-    expect(screen.getByText("45'")).toBeInTheDocument();
+    expect(await screen.findByText(/LIVE · 45'/i)).toBeInTheDocument();
+    expect(screen.getByText(/45'/)).toBeInTheDocument();
   });
 
-  it('shows confidence level when prediction is available', () => {
+  it('shows confidence level when prediction is available', async () => {
     render(<MatchCard {...mockProps} />);
     
-    // Check for confidence percentage - might be in different format
-    expect(screen.getByText('75%')).toBeInTheDocument();
+    expect(await screen.findByText(/Medium/i)).toBeInTheDocument();
   });
 
-  it('handles missing prediction gracefully', () => {
+  it('handles missing prediction gracefully', async () => {
+    setMockAppContextValue({ getPrediction: vi.fn(() => null) });
     render(<MatchCard {...mockProps} />);
     
-    expect(screen.getByText('Manchester United')).toBeInTheDocument();
-    expect(screen.getByText('Liverpool')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Manchester United' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Liverpool' })).toBeInTheDocument();
     expect(screen.queryByTestId('probability-bar')).not.toBeInTheDocument();
   });
 });

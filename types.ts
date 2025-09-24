@@ -335,11 +335,13 @@ export interface Prediction {
 export enum View {
     Dashboard = 'dashboard',
     Fixtures = 'fixtures',
+    Predictions = 'predictions',
     MatchDetail = 'matchDetail',
     MyTeams = 'myTeams',
     News = 'news',
     TeamPage = 'teamPage',
     PredictionDetail = 'predictionDetail',
+    Accuracy = 'accuracy',
 }
 
 export enum AlertType {
@@ -484,6 +486,5 @@ export interface PredictionContext {
 export interface AppData {
   teams: { [key: string]: Team };
   fixtures: Match[];
-  pastPredictions: PastPrediction[];
   leagueTables: { [key in League]?: LeagueTableRow[] };
 }

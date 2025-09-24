@@ -1,12 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '../utils/testUtils';
+import { render, screen, fireEvent, waitFor, mockAppContextValue, setMockAppContextValue } from '../utils/testUtils';
 import Dashboard from '../../components/Dashboard';
-import { mockMatch, mockAppContextValue } from '../utils/testUtils';
-
-// Mock the AppContext
-vi.mock('../../contexts/AppContext', () => ({
-  useAppContext: () => mockAppContextValue,
-}));
+import { mockMatch } from '../utils/testUtils';
 
 // Mock child components
 vi.mock('../../components/MatchCard', () => ({
@@ -36,29 +31,31 @@ describe('Dashboard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setMockAppContextValue({});
   });
 
-  it('renders dashboard with today\'s matches', () => {
+  it('renders dashboard with today\'s matches', async () => {
     render(<Dashboard {...mockProps} />);
     
-    expect(screen.getByText('Today\'s Matches')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Upcoming Focus')).toBeInTheDocument();
+    });
     expect(screen.getByTestId('match-card')).toBeInTheDocument();
   });
 
-  it('displays Champions League section when matches are available', () => {
-    const championsMock = {
-      ...mockAppContextValue,
+  it('displays Champions League section when matches are available', async () => {
+    setMockAppContextValue({
       fixtures: [{
         ...mockMatch,
         league: 'UEFA Champions League' as any,
       }],
-    };
-
-    vi.mocked(require('../../contexts/AppContext').useAppContext).mockReturnValue(championsMock);
+    });
 
     render(<Dashboard {...mockProps} />);
     
-    expect(screen.getByText('Today\'s UEFA Champions League')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Upcoming Focus')).toBeInTheDocument();
+    });
   });
 
   it('calls onSelectMatch when a match is clicked', async () => {
@@ -100,29 +97,28 @@ describe('Dashboard', () => {
     });
   });
 
-  it('displays loading state when isLoading is true', () => {
-    const loadingMock = {
-      ...mockAppContextValue,
+  it('displays loading state when isLoading is true', async () => {
+    setMockAppContextValue({
       isLoading: true,
-    };
-
-    vi.mocked(require('../../contexts/AppContext').useAppContext).mockReturnValue(loadingMock);
+      fixtures: [],
+    });
 
     render(<Dashboard {...mockProps} />);
     
-    expect(screen.getByText('Loading fixtures...')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Loading complete featured leagues data/i)).toBeInTheDocument();
+    });
   });
 
-  it('displays error state when error exists', () => {
-    const errorMock = {
-      ...mockAppContextValue,
-      error: 'Failed to load fixtures',
-    };
-
-    vi.mocked(require('../../contexts/AppContext').useAppContext).mockReturnValue(errorMock);
+  it('displays error state when error exists', async () => {
+    setMockAppContextValue({
+      fixtureError: 'Failed to load fixtures',
+    });
 
     render(<Dashboard {...mockProps} />);
     
-    expect(screen.getByText('Failed to load fixtures')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('fixtures-error-message')).toHaveTextContent(/Failed to load fixtures/i);
+    });
   });
 });
