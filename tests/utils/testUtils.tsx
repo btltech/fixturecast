@@ -3,6 +3,29 @@ import { render, RenderOptions } from '@testing-library/react';
 import { vi } from 'vitest';
 import { AppProvider } from '../../contexts/AppContext';
 
+// Mock all API services to prevent real network calls
+vi.mock('../../services/footballApiService', () => ({
+  getTodaysFixtures: vi.fn().mockResolvedValue([]),
+  getUpcomingFixtures: vi.fn().mockResolvedValue([]),
+  getLiveMatches: vi.fn().mockResolvedValue([]),
+  getTeamDetails: vi.fn().mockResolvedValue(null),
+  getAllLeagueTables: vi.fn().mockResolvedValue({}),
+  getApiUsage: vi.fn().mockResolvedValue({ requests: 0, limit: 100 }),
+}));
+
+vi.mock('../../services/liveMatchService', () => ({
+  getLiveMatches: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../../services/newsService', () => ({
+  getNews: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../../services/predictionService', () => ({
+  generatePrediction: vi.fn().mockResolvedValue(null),
+  generatePredictionsForMatches: vi.fn().mockResolvedValue([]),
+}));
+
 // Mock data for testing
 export const mockMatch = {
   id: '1',
@@ -11,7 +34,7 @@ export const mockMatch = {
   homeTeamId: 33,
   awayTeamId: 40,
   league: 'Premier League' as any,
-  date: '2024-01-15T15:00:00Z',
+  date: '2024-01-15T15:00:00.000Z',
   venue: 'Old Trafford',
   status: 'NS' as any,
 };
@@ -121,9 +144,15 @@ export const mockAppContextValue = {
   clearError: vi.fn(),
 };
 
+// Mock the AppProvider to prevent context errors
+vi.mock('../../contexts/AppContext', () => ({
+  AppProvider: ({ children }: { children: React.ReactNode }) => children,
+  useAppContext: () => mockAppContextValue,
+}));
+
 // Custom render function that includes providers
 const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
-  return <AppProvider>{children}</AppProvider>;
+  return <>{children}</>;
 };
 
 const customRender = (

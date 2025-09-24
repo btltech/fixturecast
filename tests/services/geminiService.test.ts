@@ -49,7 +49,7 @@ describe('GeminiService', () => {
 
   it('generates a prediction successfully', async () => {
     const context = {
-      match: mockMatch,
+      match: { ...mockMatch, date: '2024-01-15T15:00:00.000Z' },
       homeTeam: mockTeams[33],
       awayTeam: mockTeams[40],
       homeTeamForm: ['W', 'W', 'D', 'W', 'L'],
@@ -70,7 +70,7 @@ describe('GeminiService', () => {
 
   it('makes correct API call to Gemini', async () => {
     const context = {
-      match: mockMatch,
+      match: { ...mockMatch, date: '2024-01-15T15:00:00.000Z' },
       homeTeam: mockTeams[33],
       awayTeam: mockTeams[40],
       homeTeamForm: ['W', 'W', 'D'],
@@ -100,7 +100,7 @@ describe('GeminiService', () => {
     } as Response);
 
     const context = {
-      match: mockMatch,
+      match: { ...mockMatch, date: '2024-01-15T15:00:00.000Z' },
       homeTeam: mockTeams[33],
       awayTeam: mockTeams[40],
       homeTeamForm: ['W', 'W', 'D'],
@@ -126,7 +126,7 @@ describe('GeminiService', () => {
     } as Response);
 
     const context = {
-      match: mockMatch,
+      match: { ...mockMatch, date: '2024-01-15T15:00:00.000Z' },
       homeTeam: mockTeams[33],
       awayTeam: mockTeams[40],
       homeTeamForm: ['W', 'W', 'D'],
@@ -139,7 +139,7 @@ describe('GeminiService', () => {
 
   it('includes team form in the context', async () => {
     const context = {
-      match: mockMatch,
+      match: { ...mockMatch, date: '2024-01-15T15:00:00.000Z' },
       homeTeam: mockTeams[33],
       awayTeam: mockTeams[40],
       homeTeamForm: ['W', 'W', 'D', 'W', 'L'],
@@ -182,7 +182,7 @@ describe('GeminiService', () => {
     } as Response);
 
     const context = {
-      match: mockMatch,
+      match: { ...mockMatch, date: '2024-01-15T15:00:00.000Z' },
       homeTeam: mockTeams[33],
       awayTeam: mockTeams[40],
       homeTeamForm: ['W'],

@@ -105,6 +105,7 @@ describe('MatchCard', () => {
 
     render(<MatchCard {...mockProps} match={liveMatch} />);
     
+    // Check for live indicators - these might be in different elements
     expect(screen.getByText('LIVE')).toBeInTheDocument();
     expect(screen.getByText("45'")).toBeInTheDocument();
   });
@@ -112,6 +113,7 @@ describe('MatchCard', () => {
   it('shows confidence level when prediction is available', () => {
     render(<MatchCard {...mockProps} />);
     
+    // Check for confidence percentage - might be in different format
     expect(screen.getByText('75%')).toBeInTheDocument();
   });
 

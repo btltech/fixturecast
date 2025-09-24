@@ -19,6 +19,7 @@ export default defineConfig({
         '**/*.config.ts',
         'dist/',
         'functions/',
+        'scripts/db/**',
       ],
     },
   },

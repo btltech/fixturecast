@@ -43,7 +43,6 @@ describe('FootballApiService', () => {
         ok: true,
         json: () => Promise.resolve(mockResponse),
       } as Response);
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
       const fixtures = await getFixtures(League.PremierLeague);
 vi.mock('../../services/teamDataService', () => ({

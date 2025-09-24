@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '../utils/testUtils';
 import App from '../../App';
 import { mockMatch, mockTeams, mockPrediction } from '../utils/testUtils';
+import { BrowserRouter } from 'react-router-dom';
 
 // Mock services
 vi.mock('../../services/footballApiService');
@@ -29,6 +30,7 @@ const mockContextValue = {
 vi.mock('../../contexts/AppContext', () => ({
   useAppContext: () => mockContextValue,
   AppContextProvider: ({ children }: any) => children,
+  AppProvider: ({ children }: any) => children,
 }));
 
 // Mock performance and theme services
@@ -66,7 +68,11 @@ describe('User Flow Integration Tests', () => {
   });
 
   it('loads dashboard and navigates to match detail', async () => {
-    render(<App />);
+    render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    );
 
     // Should show dashboard initially
     await waitFor(() => {
@@ -87,7 +93,11 @@ describe('User Flow Integration Tests', () => {
   });
 
   it('navigates between different views', async () => {
-    render(<App />);
+    render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    );
 
     // Start on dashboard
     await waitFor(() => {
@@ -120,7 +130,11 @@ describe('User Flow Integration Tests', () => {
   });
 
   it('searches for teams and navigates to results', async () => {
-    render(<App />);
+    render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Today's Matches")).toBeInTheDocument();
@@ -149,7 +163,11 @@ describe('User Flow Integration Tests', () => {
     const mockGeneratePrediction = vi.fn().mockResolvedValue(mockPrediction);
     mockContextValue.generatePrediction = mockGeneratePrediction;
 
-    render(<App />);
+    render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Today's Matches")).toBeInTheDocument();
@@ -180,7 +198,11 @@ describe('User Flow Integration Tests', () => {
     vi.mocked(require('../../contexts/AppContext').useAppContext)
       .mockReturnValue(errorContextValue);
 
-    render(<App />);
+    render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    );
 
     // Should show error message
     await waitFor(() => {
@@ -205,7 +227,11 @@ describe('User Flow Integration Tests', () => {
     vi.mocked(require('../../contexts/AppContext').useAppContext)
       .mockReturnValue(loadingContextValue);
 
-    render(<App />);
+    render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    );
 
     // Should show loading spinner
     await waitFor(() => {
@@ -224,7 +250,11 @@ describe('User Flow Integration Tests', () => {
       value: 375,
     });
 
-    render(<App />);
+    render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Today's Matches")).toBeInTheDocument();
@@ -249,7 +279,11 @@ describe('User Flow Integration Tests', () => {
   });
 
   it('maintains state during navigation', async () => {
-    render(<App />);
+    render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Today's Matches")).toBeInTheDocument();
