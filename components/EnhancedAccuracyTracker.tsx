@@ -13,7 +13,6 @@ interface EnhancedAccuracyTrackerProps {
 const EnhancedAccuracyTracker: React.FC<EnhancedAccuracyTrackerProps> = ({ className = '', onSelectPrediction }) => {
   const [stats, setStats] = useState<AccuracyStats | null>(null);
   const [todaysPredictions, setTodaysPredictions] = useState<any[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [showAllPredictions, setShowAllPredictions] = useState(false);
 
@@ -53,24 +52,7 @@ const EnhancedAccuracyTracker: React.FC<EnhancedAccuracyTrackerProps> = ({ class
     
     setStats(accuracyStats);
     setTodaysPredictions(todaysData);
-    setIsGenerating(serviceStatus.isGenerating);
     setLastUpdate(Date.now());
-  };
-
-  const handleGeneratePredictions = async () => {
-    setIsGenerating(true);
-    try {
-      const result = await autoPredictionService.generateTodaysPredictions();
-      if (result.total > 0 && todaysPredictions.length > 0) {
-        setShowAllPredictions(true);
-      }
-      // Let events progressively refresh the list
-    } catch (error) {
-      console.error('Failed to generate predictions:', error);
-      alert('Failed to generate predictions. Please try again later.');
-    } finally {
-      setIsGenerating(false);
-    }
   };
 
   const handleDebugMatches = async () => {
@@ -145,17 +127,6 @@ const EnhancedAccuracyTracker: React.FC<EnhancedAccuracyTrackerProps> = ({ class
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg sm:text-xl font-bold text-blue-400">🎯 Prediction Accuracy Tracker</h3>
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={handleGeneratePredictions}
-            disabled={isGenerating}
-            className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors ${
-              isGenerating 
-                ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            {isGenerating ? '⏳ Generating...' : '🤖 Generate Today\'s Predictions'}
-          </button>
           {!showAllPredictions && remaining > 0 && (
             <button
               onClick={() => setShowAllPredictions(true)}

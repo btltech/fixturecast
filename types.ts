@@ -342,6 +342,7 @@ export enum View {
     TeamPage = 'teamPage',
     PredictionDetail = 'predictionDetail',
     Accuracy = 'accuracy',
+    // Scheduler removed from public site - admin access via AWS Console only
 }
 
 export enum AlertType {

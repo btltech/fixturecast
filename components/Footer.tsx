@@ -7,8 +7,16 @@ const Footer: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center text-gray-400 text-sm">
           <h3 className="font-bold text-gray-200 mb-2">Disclaimer</h3>
-          <p className="max-w-3xl mx-auto">
+          <p className="max-w-3xl mx-auto mb-3">
             FixtureCast provides predictions based on statistical models and historical data. These predictions are not guarantees. Football is inherently unpredictable. We do not provide betting services and do not encourage or endorse gambling. Use this app for entertainment and informational purposes only.
+          </p>
+          <p className="text-center">
+            <a 
+              href="/disclaimer" 
+              className="text-blue-400 hover:text-blue-300 underline hover:no-underline font-medium"
+            >
+              Read Full Disclaimer & Terms
+            </a>
           </p>
 
           <div className="mt-5 flex flex-col items-center space-y-2">
@@ -18,8 +26,9 @@ const Footer: React.FC = () => {
             </div>
             <p className="text-gray-400 text-xs">
               Need help? Visit{' '}
-              <a href="https://www.begambleaware.org" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">BeGambleAware.org</a>{' '}or{' '}
-              <a href="https://www.gamcare.org.uk" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">GamCare</a>.
+              <a href="/disclaimer" className="text-blue-400 hover:text-blue-300 underline">our disclaimer page</a>{' '}
+              for international gambling support resources |{' '}
+              <a href="https://www.begambleaware.org" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">BeGambleAware.org</a>
             </p>
           </div>
           <p className="mt-6 text-gray-500">

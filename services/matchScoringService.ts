@@ -1,16 +1,91 @@
 import { Match, League, LeagueTableRow } from '../types';
 
-// HARD-CODED FEATURED LEAGUES ONLY - NO OTHER LEAGUES ALLOWED
-const LEAGUE_SCORES: Partial<{ [key in League]: number }> = {
-  [League.PremierLeague]: 90,
-  [League.LaLiga]: 85,
-  [League.SerieA]: 80,
-  [League.Championship]: 40,
-  [League.ChampionsLeague]: 100,
-  [League.EuropaLeague]: 75,
-  [League.EuropaConferenceLeague]: 65,
-  [League.Bundesliga]: 85,
-  [League.Ligue1]: 75,
+// TEAM PRESTIGE SCORES - Biggest teams get highest priority
+const TEAM_PRESTIGE_SCORES: { [teamName: string]: number } = {
+  // Tier 1: Global Superpowers (90-100 points)
+  'Manchester United': 100,
+  'Real Madrid': 100,
+  'Barcelona': 95,
+  'Liverpool': 95,
+  'Bayern Munich': 95,
+  'Manchester City': 90,
+  'Arsenal': 90,
+  'Chelsea': 90,
+  'Juventus': 90,
+  'AC Milan': 90,
+  'Inter': 90,
+  'Paris Saint Germain': 90,
+  
+  // Tier 2: Elite European Teams (75-85 points)
+  'Tottenham': 85,
+  'Atletico Madrid': 85,
+  'Borussia Dortmund': 85,
+  'Napoli': 80,
+  'Newcastle': 80,
+  'West Ham': 75,
+  'Aston Villa': 75,
+  'Brighton': 75,
+  'Sevilla': 75,
+  'Valencia': 75,
+  'Villarreal': 75,
+  'Athletic Club': 75,
+  'Real Sociedad': 75,
+  'Roma': 75,
+  'Lazio': 75,
+  'Atalanta': 75,
+  'Fiorentina': 75,
+  'RB Leipzig': 75,
+  'Bayer Leverkusen': 75,
+  'Eintracht Frankfurt': 75,
+  'Lyon': 75,
+  'Marseille': 75,
+  'Monaco': 75,
+  
+  // Tier 3: Strong Teams (50-70 points)
+  'Everton': 70,
+  'Leicester': 70,
+  'Crystal Palace': 65,
+  'Fulham': 65,
+  'Brentford': 65,
+  'Wolves': 65,
+  'Nottingham Forest': 65,
+  'Bournemouth': 60,
+  'Sheffield United': 55,
+  'Burnley': 55,
+  'Luton': 50,
+  'Real Betis': 70,
+  'Getafe': 60,
+  'Real Valladolid': 55,
+  'Osasuna': 55,
+  'Bologna': 65,
+  'Torino': 60,
+  'Genoa': 55,
+  'Lecce': 50,
+  'Werder Bremen': 65,
+  'Union Berlin': 60,
+  'Freiburg': 60,
+  'Hoffenheim': 55,
+  'Augsburg': 50,
+  'Lille': 65,
+  'Rennes': 60,
+  'Nice': 60,
+  'Montpellier': 55,
+  'Strasbourg': 50,
+  
+  // Add more teams as needed - default is 30 points for unlisted teams
+};
+
+// LEAGUE MULTIPLIERS - Simple league importance
+const LEAGUE_MULTIPLIERS: Partial<{ [key in League]: number }> = {
+  [League.ChampionsLeague]: 1.5,
+  [League.PremierLeague]: 1.3,
+  [League.LaLiga]: 1.2,
+  [League.SerieA]: 1.2,
+  [League.Bundesliga]: 1.2,
+  [League.Ligue1]: 1.1,
+  [League.EuropaLeague]: 1.1,
+  [League.EuropaConferenceLeague]: 1.0,
+  [League.Championship]: 0.7,
 };
 
 // Major rivalries (add more as needed)
@@ -200,52 +275,77 @@ const isRivalry = (homeTeam: string, awayTeam: string): boolean => {
   return homeRivals.includes(awayTeam) || awayRivals.includes(homeTeam);
 };
 
-// Main scoring function
+// Get team prestige score
+const getTeamPrestigeScore = (teamName: string): number => {
+  return TEAM_PRESTIGE_SCORES[teamName] || 30; // Default 30 for unlisted teams
+};
+
+// Main scoring function - SIMPLIFIED to prioritize biggest teams
 export const scoreMatch = (
   match: Match, 
   leagueTables: { [key in League]?: LeagueTableRow[] } = {}
 ): number => {
-  let totalScore = 0;
+  // Base score is the sum of both teams' prestige scores
+  const homeTeamScore = getTeamPrestigeScore(match.homeTeam);
+  const awayTeamScore = getTeamPrestigeScore(match.awayTeam);
+  let totalScore = homeTeamScore + awayTeamScore;
   
-  // League importance score
-  totalScore += LEAGUE_SCORES[match.league] || 0;
+  // Apply league multiplier
+  const leagueMultiplier = LEAGUE_MULTIPLIERS[match.league] || 1.0;
+  totalScore = totalScore * leagueMultiplier;
   
-  // Rivalry bonus
+  // Big rivalry bonus (still important for El Clasico, etc.)
   if (isRivalry(match.homeTeam, match.awayTeam)) {
     totalScore += 50;
   }
   
-  // Prime time score
-  totalScore += getPrimeTimeScore(match);
+  // Small weekend bonus for tie-breaking
+  const matchDate = new Date(match.date);
+  const dayOfWeek = matchDate.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) { // Weekend
+    totalScore += 10;
+  }
   
-  // Table context score
-  totalScore += getTableContextScore(match, leagueTables);
-  
-  return totalScore;
+  return Math.round(totalScore);
 };
 
-// Find the best match of the day (only from today's matches)
+// Find the best match of the day (only from today's matches - UK timezone aware)
 export const selectMatchOfTheDay = (
   fixtures: Match[], 
   leagueTables: { [key in League]?: LeagueTableRow[] } = {}
 ): Match | null => {
   if (fixtures.length === 0) return null;
   
-  // Filter for today's matches only
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  // Get today's date in UK timezone (UTC+1 in summer, UTC+0 in winter)
+  // For simplicity, using UTC and being flexible with date boundaries
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  // Be more flexible - include matches from today and next 24 hours
+  const todayStart = new Date(today.getTime() - (12 * 60 * 60 * 1000)); // 12 hours before today
+  const todayEnd = new Date(today.getTime() + (36 * 60 * 60 * 1000)); // 36 hours after today start
   
   const todaysMatches = fixtures.filter(match => {
     const matchDate = new Date(match.date);
     return matchDate >= todayStart && matchDate < todayEnd;
   });
   
-  // If no matches today, return null
-  if (todaysMatches.length === 0) return null;
+  console.log(`🎯 Match of the Day selection:`, {
+    totalFixtures: fixtures.length,
+    todaysMatches: todaysMatches.length,
+    todayStart: todayStart.toISOString(),
+    todayEnd: todayEnd.toISOString(),
+    matchDates: todaysMatches.slice(0, 3).map(m => ({ 
+      match: `${m.homeTeam} vs ${m.awayTeam}`, 
+      date: m.date 
+    }))
+  });
   
-  // Score all today's matches
-  const scoredMatches = todaysMatches.map(match => ({
+  // If no matches today, fall back to next available matches
+  const matchesToScore = todaysMatches.length > 0 ? todaysMatches : fixtures.slice(0, 10);
+  
+  // Score matches prioritizing biggest teams
+  const scoredMatches = matchesToScore.map(match => ({
     match,
     score: scoreMatch(match, leagueTables)
   }));
@@ -262,21 +362,27 @@ export const getMatchScoreBreakdown = (
   match: Match, 
   leagueTables: { [key in League]?: LeagueTableRow[] } = {}
 ) => {
-  const leagueScore = LEAGUE_SCORES[match.league] || 0;
+  const homeTeamScore = getTeamPrestigeScore(match.homeTeam);
+  const awayTeamScore = getTeamPrestigeScore(match.awayTeam);
+  const baseScore = homeTeamScore + awayTeamScore;
+  const leagueMultiplier = LEAGUE_MULTIPLIERS[match.league] || 1.0;
+  const leagueAdjustedScore = baseScore * leagueMultiplier;
   const rivalryScore = isRivalry(match.homeTeam, match.awayTeam) ? 50 : 0;
-  const primeTimeScore = getPrimeTimeScore(match);
-  const tableContextScore = getTableContextScore(match, leagueTables);
-  const totalScore = leagueScore + rivalryScore + primeTimeScore + tableContextScore;
+  const weekendBonus = (new Date(match.date).getDay() === 0 || new Date(match.date).getDay() === 6) ? 10 : 0;
+  const totalScore = Math.round(leagueAdjustedScore + rivalryScore + weekendBonus);
   
   return {
     match: `${match.homeTeam} vs ${match.awayTeam}`,
     league: match.league,
     date: match.date,
     scores: {
-      league: leagueScore,
+      homeTeam: `${match.homeTeam} (${homeTeamScore})`,
+      awayTeam: `${match.awayTeam} (${awayTeamScore})`,
+      baseScore: baseScore,
+      leagueMultiplier: leagueMultiplier,
+      leagueAdjustedScore: Math.round(leagueAdjustedScore),
       rivalry: rivalryScore,
-      primeTime: primeTimeScore,
-      tableContext: tableContextScore,
+      weekendBonus: weekendBonus,
       total: totalScore
     }
   };

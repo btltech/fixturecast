@@ -30,9 +30,10 @@ export const getLiveMatches = async (): Promise<LiveMatch[]> => {
         const homeAllowed = isTeamAllowed(fixture.teams?.home?.name || '');
         const awayAllowed = isTeamAllowed(fixture.teams?.away?.name || '');
 
-        if (isLiveStatus && (!leagueAllowed || !homeAllowed || !awayAllowed)) {
-          console.warn(
-            `⚠️ Filtering out match. LeagueAllowed=${leagueAllowed} HomeAllowed=${homeAllowed} AwayAllowed=${awayAllowed} :: ${leagueName} - ${fixture.teams?.home?.name} vs ${fixture.teams?.away?.name}`
+        // Reduced logging - only log when in development
+        if (isLiveStatus && (!leagueAllowed || !homeAllowed || !awayAllowed) && process.env.NODE_ENV === 'development') {
+          console.info(
+            `ℹ️ Filtering match (not in whitelist): ${leagueName} - ${fixture.teams?.home?.name} vs ${fixture.teams?.away?.name}`
           );
         }
 
@@ -67,10 +68,10 @@ export const getLiveMatchById = async (matchId: string): Promise<LiveMatch | nul
   const liveMatches = await getLiveMatches();
   // Additional filtering to ensure only allowed leagues
   const allowedLiveMatches = liveMatches.filter(match => {
-    const leagueName = typeof match.league === 'string' ? match.league : match.league?.name || '';
+    const leagueName = typeof match.league === 'string' ? match.league : (match.league as any)?.name || '';
     const allowed = isLeagueAllowed(leagueName) && isTeamAllowed(match.homeTeam) && isTeamAllowed(match.awayTeam);
-    if (!allowed) {
-      console.warn(`⚠️ Filtering out live match by ID due to whitelist policy: ${leagueName} - ${match.homeTeam} vs ${match.awayTeam}`);
+    if (!allowed && process.env.NODE_ENV === 'development') {
+      console.info(`ℹ️ Filtering live match by ID (not in whitelist): ${leagueName} - ${match.homeTeam} vs ${match.awayTeam}`);
     }
     return allowed;
   });
@@ -81,10 +82,10 @@ export const getLiveMatchUpdates = async (matchIds: string[]): Promise<LiveMatch
   const liveMatches = await getLiveMatches();
   // Additional filtering to ensure only allowed leagues
   const allowedLiveMatches = liveMatches.filter(match => {
-    const leagueName = typeof match.league === 'string' ? match.league : match.league?.name || '';
+    const leagueName = typeof match.league === 'string' ? match.league : (match.league as any)?.name || '';
     const allowed = isLeagueAllowed(leagueName) && isTeamAllowed(match.homeTeam) && isTeamAllowed(match.awayTeam);
-    if (!allowed) {
-      console.warn(`⚠️ Filtering out live match updates due to whitelist policy: ${leagueName} - ${match.homeTeam} vs ${match.awayTeam}`);
+    if (!allowed && process.env.NODE_ENV === 'development') {
+      console.info(`ℹ️ Filtering live match updates (not in whitelist): ${leagueName} - ${match.homeTeam} vs ${match.awayTeam}`);
     }
     return allowed;
   });

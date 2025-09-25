@@ -6,16 +6,17 @@ import MatchCard from './MatchCard';
 import TeamLogo from './TeamLogo';
 import LeagueLogo from './LeagueLogo';
 import { useAppContext } from '../contexts/AppContext';
-import { selectMatchOfTheDay, getMatchScoreBreakdown } from '../services/matchScoringService';
+import { selectMatchOfTheDay, getMatchScoreBreakdown, scoreMatch } from '../services/matchScoringService';
 import { getHomeTeamName, getAwayTeamName, getMatchLeagueName } from '../utils/matchUtils';
 import EnhancedAccuracyTracker from './EnhancedAccuracyTracker';
 import CloudIntegrityPanel from './CloudIntegrityPanel';
 import EnhancedLiveMatchesList from './EnhancedLiveMatchesList';
 import ConfidenceOverview from './ConfidenceOverview';
 import FormTrendsOverview from './FormTrendsOverview';
-import DeploymentStatus from './DeploymentStatus';
-import PerformanceDashboard from './PerformanceDashboard';
+// DeploymentStatus removed from public view - admin debugging only
+// PerformanceDashboard removed from public view - admin monitoring only
 import LoadingSpinner from './LoadingSpinner';
+import AutomatedSystemStatus from './AutomatedSystemStatus';
 
 interface DashboardProps {
   onSelectMatch: (match: Match) => void;
@@ -99,20 +100,46 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
   const { fixtures, teams, leagueTables, favoriteTeams, toggleFavoriteTeam, lastUpdated, refreshRealTimeData, accuracyStats, getAccuracyDisplay, liveMatches, fetchLiveMatches, getPrediction, loadLeagueFixtures, loadLeagueTable, apiUsage, isLoading, getTeamDataStatus, refreshAllTeamDetails, fixtureError } = useAppContext();
   const navigate = useNavigate();
 
-  // Debug: Log fixtures status
+  // Debug: Log fixtures status and examine real fixture data
   console.log('📊 Dashboard: fixtures length:', fixtures.length);
   console.log('📊 Dashboard: isLoading:', isLoading);
+  
   if (fixtures.length > 0) {
-    console.log('🔍 Dashboard: sample fixtures:', fixtures.slice(0, 2).map(f => `${f.homeTeam} vs ${f.awayTeam} (${f.league})`));
-    console.log('🔍 Dashboard: all fixture leagues:', fixtures.map(f => f.league));
+    // Show ALL fixtures with dates so we can see what's actually available
+    console.log('🔍 Dashboard: ALL REAL FIXTURES:', fixtures.map(f => ({
+      match: `${f.homeTeam} vs ${f.awayTeam}`,
+      league: f.league,
+      date: f.date,
+      dateOnly: f.date.split('T')[0]
+    })));
+    
+    // Show today's fixtures specifically
+    const todayStr = '2025-09-26';
+    const todayFixtures = fixtures.filter(f => f.date.startsWith(todayStr));
+    console.log(`🎯 FIXTURES FOR TODAY (${todayStr}):`, todayFixtures.map(f => ({
+      match: `${f.homeTeam} vs ${f.awayTeam}`,
+      league: f.league,
+      time: f.date.split('T')[1]?.substring(0, 5)
+    })));
+    
+    // Show weekend fixtures
+    const weekendFixtures = fixtures.filter(f => 
+      f.date.startsWith('2025-09-27') || f.date.startsWith('2025-09-28')
+    );
+    console.log(`🏁 WEEKEND FIXTURES (Sep 27-28):`, weekendFixtures.map(f => ({
+      match: `${f.homeTeam} vs ${f.awayTeam}`,
+      league: f.league,
+      date: f.date.split('T')[0]
+    })));
+    
     console.log('🔍 Dashboard: Premier League fixtures:', fixtures.filter(f => f.league === League.PremierLeague).length);
   }
   const [allTeamsCollapsed, setAllTeamsCollapsed] = useState(true);
 
   // Prefer today's earliest match for countdown; fallback to first fixture
-  // Use the correct current date: September 20, 2025
-  const todayStart = new Date('2025-09-20T00:00:00Z');
-  const todayEnd = new Date('2025-09-21T00:00:00Z');
+  // Use the correct current date: September 26, 2025
+  const todayStart = new Date('2025-09-26T00:00:00Z');
+  const todayEnd = new Date('2025-09-27T00:00:00Z');
   const todaysFixtures = useMemo(() => {
     // Define league importance hierarchy (most important first)
     const LEAGUE_PRIORITY = {
@@ -187,95 +214,140 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
 
   // Use intelligent match scoring to select Match of the Day
   const matchOfTheDay = useMemo(() => {
-    return selectMatchOfTheDay(fixtures, leagueTables);
+    const selected = selectMatchOfTheDay(fixtures, leagueTables);
+    
+    if (selected) {
+      console.log('🎯 MATCH OF THE DAY SELECTED:', {
+        match: `${selected.homeTeam} vs ${selected.awayTeam}`,
+        league: selected.league,
+        date: selected.date,
+        isToday: selected.date.startsWith('2025-09-26')
+      });
+    } else {
+      console.log('❌ NO MATCH OF THE DAY SELECTED - no fixtures available');
+    }
+    
+    return selected;
   }, [fixtures, leagueTables]);
 
-  // Get remaining fixtures (excluding the selected match of the day)
+  // Get remaining fixtures (excluding the selected match of the day) - sorted by biggest teams
   const upcomingFocusMatches = useMemo(() => {
-    if (!matchOfTheDay) return fixtures.slice(0, 3);
-    return fixtures.filter(f => f.id !== matchOfTheDay.id).slice(0, 3);
-  }, [fixtures, matchOfTheDay]);
+    const remainingFixtures = matchOfTheDay 
+      ? fixtures.filter(f => f.id !== matchOfTheDay.id)
+      : fixtures;
+    
+    // Sort by match score to prioritize biggest teams
+    const scoredMatches = remainingFixtures.map(match => ({
+      match,
+      score: scoreMatch(match, leagueTables)
+    }));
+    
+    scoredMatches.sort((a, b) => b.score - a.score);
+    
+    return scoredMatches.slice(0, 3).map(item => item.match);
+  }, [fixtures, matchOfTheDay, leagueTables]);
 
   const homeTeamColor = matchOfTheDay && teams ? teams[getHomeTeamName(matchOfTheDay)]?.jerseyColors.primary || '#1f2937' : '#1f2937';
   const awayTeamColor = matchOfTheDay && teams ? teams[getAwayTeamName(matchOfTheDay)]?.jerseyColors.primary || '#374151' : '#374151';
 
   return (
     <div className="space-y-6 sm:space-y-8 lg:space-y-12">
-      {/* Today's Predictions - Featured prominently */}
-      {todaysFixtures.length > 0 && (
-        <section className="bg-gradient-to-r from-orange-900/30 to-red-900/30 rounded-xl p-4 sm:p-6 shadow-2xl border border-orange-500/40">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <span className="text-2xl">🔥</span>
-              <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-orange-300">Today's Predictions</h2>
-              <div className="bg-orange-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                {todaysFixtures.length} {todaysFixtures.length === 1 ? 'match' : 'matches'}
+      {/* Next Major Matchday - Priority #1 at the top */}
+      <section className="text-center bg-gradient-to-br from-indigo-900/40 to-purple-900/40 rounded-xl p-4 sm:p-6 lg:p-10 shadow-2xl border border-indigo-500/40">
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-indigo-300 mb-4 sm:mb-6">⏰ Next Major Matchday In</h2>
+        <Countdown targetDate={nextMatchday} />
+      </section>
+
+      {/* Automated System Status */}
+      <AutomatedSystemStatus />
+      
+      {/* Match of the Day - Priority #2 */}
+      {matchOfTheDay && (
+        <section>
+          <h2 className="text-3xl font-bold tracking-tight text-white mb-6">🎯 Match of the Day</h2>
+          <div 
+            className="rounded-xl overflow-hidden shadow-2xl border border-gray-700 p-8 relative match-background"
+            data-bg={`${homeTeamColor}_${awayTeamColor}`}
+          >
+              <div className="flex flex-col md:flex-row items-center justify-around text-center">
+                  <div className="flex flex-col items-center space-y-3 w-full md:w-1/3">
+                      <TeamLogo teamName={getHomeTeamName(matchOfTheDay)} size="large" clickable={true} onClick={() => onSelectTeam(getHomeTeamName(matchOfTheDay))} />
+                      <h3
+                        className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors duration-200"
+                        onClick={() => onSelectTeam(getHomeTeamName(matchOfTheDay))}
+                      >
+                        {getHomeTeamName(matchOfTheDay)}
+                      </h3>
+                  </div>
+
+                  <div className="flex flex-col items-center my-6 md:my-0">
+                      <p className="text-5xl font-extrabold text-gray-400">vs</p>
+                      <p className="text-blue-300 font-semibold mt-4">{getMatchLeagueName(matchOfTheDay)}</p>
+                      <p className="text-sm text-gray-400">{new Date(matchOfTheDay.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</p>
+                      <p className="text-lg font-bold text-white mt-2">{new Date(matchOfTheDay.date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
+                  </div>
+                  
+                  <div className="flex flex-col items-center space-y-3 w-full md:w-1/3">
+                      <TeamLogo teamName={getAwayTeamName(matchOfTheDay)} size="large" clickable={true} onClick={() => onSelectTeam(getAwayTeamName(matchOfTheDay))} />
+                      <h3
+                        className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors duration-200"
+                        onClick={() => onSelectTeam(getAwayTeamName(matchOfTheDay))}
+                      >
+                        {getAwayTeamName(matchOfTheDay)}
+                      </h3>
+                  </div>
               </div>
-            </div>
-            <button
-              onClick={navigateToFixtures}
-              className="px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-colors duration-200 font-medium text-sm"
-            >
-              View All Fixtures
-            </button>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-            {todaysFixtures.map(match => {
-              const prediction = getPrediction(match.id);
-              return (
-                <div key={match.id} className="relative">
-                  <MatchCard
-                    match={match}
-                    onSelectMatch={onSelectMatch}
-                    onSelectTeam={onSelectTeam}
-                  />
-                  {prediction && (
-                    <div className="absolute top-2 right-2 bg-orange-600 text-white px-2 py-1 rounded-md text-xs font-bold">
-                      TODAY
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+              <div className="mt-8 text-center">
+                  <button
+                      onClick={() => onSelectMatch(matchOfTheDay)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200 shadow-lg"
+                  >
+                      View Full Prediction
+                  </button>
+              </div>
           </div>
         </section>
       )}
+      
 
-      {/* Quick Access to Accuracy Dashboard */}
-      <section className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-xl p-4 sm:p-6 shadow-2xl border border-blue-500/40">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <span className="text-2xl">📊</span>
-            <div>
-              <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-300">Prediction Accuracy</h2>
-              <p className="text-sm text-blue-200">Track and analyze prediction performance</p>
+
+      {/* Quick Access to Accuracy Dashboard - Only show when there are meaningful predictions */}
+      {accuracyStats.totalPredictions > 0 && (
+        <section className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-xl p-4 sm:p-6 shadow-2xl border border-blue-500/40">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">📊</span>
+              <div>
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-300">Prediction Accuracy</h2>
+                <p className="text-sm text-blue-200">Track and analyze prediction performance</p>
+              </div>
+              <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                New
+              </div>
             </div>
-            <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
-              New
+            <button
+              onClick={() => navigate('/accuracy')}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors duration-200 font-medium text-sm"
+            >
+              View Accuracy Dashboard
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <div className="text-2xl font-bold text-green-400">{accuracyStats.overallAccuracy.toFixed(1)}%</div>
+              <div className="text-xs text-gray-400">Overall Accuracy</div>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <div className="text-2xl font-bold text-blue-400">{accuracyStats.totalPredictions}</div>
+              <div className="text-xs text-gray-400">Total Predictions</div>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <div className="text-2xl font-bold text-purple-400">{accuracyStats.correctOutcomes}</div>
+              <div className="text-xs text-gray-400">Correct Outcomes</div>
             </div>
           </div>
-          <button
-            onClick={() => navigate('/accuracy')}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors duration-200 font-medium text-sm"
-          >
-            View Accuracy Dashboard
-          </button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gray-800/50 rounded-lg p-3">
-            <div className="text-2xl font-bold text-green-400">{accuracyStats.overallAccuracy.toFixed(1)}%</div>
-            <div className="text-xs text-gray-400">Overall Accuracy</div>
-          </div>
-          <div className="bg-gray-800/50 rounded-lg p-3">
-            <div className="text-2xl font-bold text-blue-400">{accuracyStats.totalPredictions}</div>
-            <div className="text-xs text-gray-400">Total Predictions</div>
-          </div>
-          <div className="bg-gray-800/50 rounded-lg p-3">
-            <div className="text-2xl font-bold text-purple-400">{accuracyStats.correctOutcomes}</div>
-            <div className="text-xs text-gray-400">Correct Outcomes</div>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Today's Champions League - pinned at the very top if present */}
       {todaysFixtures.some(m => m.league === League.ChampionsLeague) && (
@@ -325,57 +397,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         </section>
       )}
 
-      <section className="text-center bg-gray-800 rounded-xl p-4 sm:p-6 lg:p-10 shadow-2xl border border-gray-700">
-        <h2 className="text-lg sm:text-xl font-semibold text-blue-400 mb-4 sm:mb-6">Next Major Matchday In</h2>
-        <Countdown targetDate={nextMatchday} />
-      </section>
 
-      {matchOfTheDay && (
-        <section>
-          <h2 className="text-3xl font-bold tracking-tight text-white mb-6">Match of the Day</h2>
-          <div 
-            className="rounded-xl overflow-hidden shadow-2xl border border-gray-700 p-8 relative match-background"
-            data-bg={`${homeTeamColor}_${awayTeamColor}`}
-          >
-              <div className="flex flex-col md:flex-row items-center justify-around text-center">
-                  <div className="flex flex-col items-center space-y-3 w-full md:w-1/3">
-                      <TeamLogo teamName={getHomeTeamName(matchOfTheDay)} size="large" clickable={true} onClick={() => onSelectTeam(getHomeTeamName(matchOfTheDay))} />
-                      <h3
-                        className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors duration-200"
-                        onClick={() => onSelectTeam(getHomeTeamName(matchOfTheDay))}
-                      >
-                        {getHomeTeamName(matchOfTheDay)}
-                      </h3>
-                  </div>
 
-                  <div className="flex flex-col items-center my-6 md:my-0">
-                      <p className="text-5xl font-extrabold text-gray-400">vs</p>
-                      <p className="text-blue-300 font-semibold mt-4">{getMatchLeagueName(matchOfTheDay)}</p>
-                      <p className="text-sm text-gray-400">{new Date(matchOfTheDay.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-                      <p className="text-lg font-bold text-white mt-2">{new Date(matchOfTheDay.date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
-                  </div>
-                  
-                  <div className="flex flex-col items-center space-y-3 w-full md:w-1/3">
-                      <TeamLogo teamName={getAwayTeamName(matchOfTheDay)} size="large" clickable={true} onClick={() => onSelectTeam(getAwayTeamName(matchOfTheDay))} />
-                      <h3
-                        className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors duration-200"
-                        onClick={() => onSelectTeam(getAwayTeamName(matchOfTheDay))}
-                      >
-                        {getAwayTeamName(matchOfTheDay)}
-                      </h3>
-                  </div>
-              </div>
-              <div className="mt-8 text-center">
-                  <button
-                      onClick={() => onSelectMatch(matchOfTheDay)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200 shadow-lg"
-                  >
-                      View Full Prediction
-                  </button>
-              </div>
-          </div>
-        </section>
-      )}
 
       <section>
         <div className="flex justify-between items-center mb-6">
@@ -398,6 +421,46 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
           ))}
         </div>
       </section>
+
+      {/* Today's Predictions - Priority #4 */}
+      {todaysFixtures.length > 0 && (
+        <section className="bg-gradient-to-r from-orange-900/30 to-red-900/30 rounded-xl p-4 sm:p-6 shadow-2xl border border-orange-500/40">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">🔥</span>
+              <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-orange-300">Today's Predictions</h2>
+              <div className="bg-orange-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                {todaysFixtures.length} {todaysFixtures.length === 1 ? 'match' : 'matches'}
+              </div>
+            </div>
+            <button
+              onClick={navigateToFixtures}
+              className="px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-colors duration-200 font-medium text-sm"
+            >
+              View All Fixtures
+            </button>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+            {todaysFixtures.map(match => {
+              const prediction = getPrediction(match.id);
+              return (
+                <div key={match.id} className="relative">
+                  <MatchCard
+                    match={match}
+                    onSelectMatch={onSelectMatch}
+                    onSelectTeam={onSelectTeam}
+                  />
+                  {prediction && (
+                    <div className="absolute top-2 right-2 bg-orange-600 text-white px-2 py-1 rounded-md text-xs font-bold">
+                      TODAY
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Professional Team Data Status */}
       <section className="bg-gray-800 rounded-xl p-6 shadow-2xl border border-gray-700">
@@ -570,7 +633,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         {isLoading ? (
           <div data-testid="fixtures-loading" className="flex items-center justify-center py-8">
             <div className="flex flex-col items-center space-y-3">
-              <LoadingSpinner size="large" />
+              <LoadingSpinner />
               <p className="text-sm text-gray-300">Loading complete featured leagues data</p>
             </div>
           </div>
@@ -617,10 +680,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
 
       
 
-      {/* Deployment Status */}
-      <section>
-        <DeploymentStatus />
-      </section>
+      {/* Deployment Status removed from public view - admin debugging only */}
 
       {/* Debug: Show fixture loading status */}
       {fixtures.length === 0 && (
@@ -686,10 +746,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
       </section>
 
       
-      {/* Performance Dashboard at bottom */}
-      <section>
-        <PerformanceDashboard />
-      </section>
+      {/* Performance Dashboard removed from public view - admin monitoring only */}
       
       {/* Navigation handled via onSelectTeam; modal removed */}
     </div>

@@ -4,9 +4,12 @@ import { View } from './types';
 import LoadingSpinner from './components/LoadingSpinner';
 import MobileBottomNavigation from './components/MobileBottomNavigation';
 import EnhancedNavigation from './components/EnhancedNavigation';
+import DisclaimerBanner from './components/DisclaimerBanner';
+import Footer from './components/Footer';
 import { useAppContext } from './contexts/AppContext';
 
 // Lazy load components for code splitting
+const HeroLandingPage = React.lazy(() => import('./components/HeroLandingPage'));
 const Dashboard = React.lazy(() => import('./components/Dashboard'));
 const Fixtures = React.lazy(() => import('./components/Fixtures'));
 const LeaguePage = React.lazy(() => import('./components/LeaguePage'));
@@ -17,6 +20,8 @@ const News = React.lazy(() => import('./components/News'));
 const PredictionDetail = React.lazy(() => import('./components/PredictionDetail'));
 const TodaysPredictions = React.lazy(() => import('./components/TodaysPredictions'));
 const AccuracyDashboard = React.lazy(() => import('./components/AccuracyDashboard'));
+const DisclaimerPage = React.lazy(() => import('./components/DisclaimerPage'));
+// Scheduler components removed from public site - admin access via AWS Console only
 
 // Wrapper component to handle navigation and provide router context
 const AppContent: React.FC = () => {
@@ -44,7 +49,7 @@ const AppContent: React.FC = () => {
   const navigateTo = (view: View) => {
     switch (view) {
       case View.Dashboard:
-        navigate('/');
+        navigate('/dashboard');
         break;
       case View.Fixtures:
         navigate('/fixtures');
@@ -59,7 +64,7 @@ const AppContent: React.FC = () => {
         navigate('/accuracy');
         break;
       default:
-        navigate('/');
+        navigate('/dashboard');
     }
   };
 
@@ -74,9 +79,15 @@ const AppContent: React.FC = () => {
 
   return (
     <Routes>
-      {/* Dashboard - Root route */}
+      {/* Hero Landing Page - Root route */}
       <Route
         path="/"
+        element={<HeroLandingPage />}
+      />
+
+      {/* Dashboard - Main app route */}
+      <Route
+        path="/dashboard"
         element={
           <Dashboard
             onSelectMatch={selectMatch}
@@ -157,8 +168,16 @@ const AppContent: React.FC = () => {
         element={<AccuracyDashboard />}
       />
 
+      {/* Disclaimer Page */}
+      <Route
+        path="/disclaimer"
+        element={<DisclaimerPage />}
+      />
+
+      {/* EventBridge Scheduler removed from public site - admin access via AWS Console only */}
+
       {/* Catch-all route - redirect to dashboard */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 };
@@ -167,6 +186,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Check if we're on the hero landing page
+  const isHeroPage = location.pathname === '/';
 
   const currentView = useMemo(() => {
     if (location.pathname.startsWith('/fixtures')) return View.Fixtures;
@@ -174,16 +196,28 @@ const App: React.FC = () => {
     if (location.pathname.startsWith('/news')) return View.News;
     if (location.pathname.startsWith('/predictions')) return View.Predictions;
     if (location.pathname.startsWith('/accuracy')) return View.Accuracy;
+    if (location.pathname.startsWith('/dashboard')) return View.Dashboard;
+    // Scheduler removed from public site
     return View.Dashboard;
   }, [location.pathname]);
 
+  // Hero page has its own layout
+  if (isHeroPage) {
+    return (
+      <Suspense fallback={<div className="flex justify-center items-center h-screen bg-gray-900"><LoadingSpinner /></div>}>
+        <AppContent />
+      </Suspense>
+    );
+  }
+
+  // Regular app layout for all other pages
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex flex-col">
       <EnhancedNavigation
         onNavigate={(view) => {
           switch (view) {
             case View.Dashboard:
-              navigate('/');
+              navigate('/dashboard');
               break;
             case View.Fixtures:
               navigate('/fixtures');
@@ -197,17 +231,26 @@ const App: React.FC = () => {
             case View.Accuracy:
               navigate('/accuracy');
               break;
+            // Scheduler removed from public site
             default:
-              navigate('/');
+              navigate('/dashboard');
           }
         }}
         currentView={currentView}
       />
+      
+      {/* Important Disclaimer - Appears on every page except hero */}
+      <DisclaimerBanner />
+      
       <main className="flex-grow container mx-auto px-4 py-8 pb-20 md:pb-8">
         <Suspense fallback={<div className="flex justify-center items-center h-64"><LoadingSpinner /></div>}>
           <AppContent />
         </Suspense>
       </main>
+      
+      {/* Footer with disclaimer */}
+      <Footer />
+      
       {/* Mobile Bottom Navigation */}
       <div className="md:hidden">
         <MobileBottomNavigation />

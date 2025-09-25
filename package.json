@@ -17,6 +17,9 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-eventbridge": "^3.896.0",
+    "@aws-sdk/client-lambda": "^3.896.0",
+    "@aws-sdk/client-scheduler": "^3.896.0",
     "@google/genai": "^1.19.0",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",

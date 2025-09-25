@@ -69,6 +69,7 @@ const EnhancedNavigation: React.FC<EnhancedNavigationProps> = ({
       badge: 'New',
       isNew: true
     }
+    // Scheduler removed from public site - admin access via AWS Console only
   ];
 
   // Load recent searches from localStorage
