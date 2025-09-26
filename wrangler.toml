@@ -3,14 +3,6 @@ name = "fixturecast"
 compatibility_date = "2024-01-15"
 pages_build_output_dir = "dist"
 
-# Cron Triggers - Automated Prediction Updates
-[triggers]
-crons = [
-  "0 */6 * * *",    # Every 6 hours
-  "30 8 * * *",     # Daily at 8:30 AM UTC  
-  "0 18 * * *"      # Daily at 6:00 PM UTC
-]
-
 [env.production]
 [[env.production.kv_namespaces]]
 binding = "PREDICTIONS_KV"
