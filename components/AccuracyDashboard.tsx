@@ -34,17 +34,45 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
     }
   };
 
-  // Force check results (simplified)
+  // Force check results (REAL API call)
   const handleForceCheck = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      // Simulate a force check - in real implementation this would call the API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('Force check completed');
+      
+      console.log('🔄 Manual force check triggered...');
+      
+      // Call the actual automation API
+      const response = await fetch('/api/update-results', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer fixturecast-lambda-secure-2024-key',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          trigger: 'manual_force_check',
+          timestamp: new Date().toISOString(),
+          source: 'accuracy_dashboard'
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Force check failed: ${response.status} ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('✅ Force check completed successfully:', result.results);
+        // Optionally trigger a refresh of accuracy data
+        // You could add a callback here to refresh the dashboard
+      } else {
+        throw new Error(result.message || 'Force check returned an error');
+      }
+      
     } catch (err) {
-      console.error('Error during force check:', err?.message || String(err));
-      setError('Failed to check results. Please try again.');
+      console.error('❌ Error during force check:', err?.message || String(err));
+      setError(`Failed to check results: ${err?.message || 'Please try again.'}`);
     } finally {
       setIsLoading(false);
     }
@@ -122,9 +150,15 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
           <button
             onClick={handleForceCheck}
             disabled={isLoading}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg transition-colors"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center space-x-2"
           >
-            {isLoading ? 'Checking...' : 'Force Check'}
+            {isLoading && (
+              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            <span>{isLoading ? 'Checking Results...' : '🔄 Manual Update'}</span>
           </button>
         </div>
       </div>
