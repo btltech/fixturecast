@@ -1,0 +1,87 @@
+[
+  {
+    "id": "pred_1758889864543_1",
+    "matchId": 1001,
+    "homeTeam": "Arsenal",
+    "awayTeam": "Liverpool",
+    "league": "Premier League",
+    "matchDate": "2025-09-26T12:31:04.543Z",
+    "prediction": {
+      "outcome": "Draw",
+      "confidence": 72,
+      "analysis": "Both teams are in excellent form. Arsenal at home advantage but Liverpool's attacking prowess makes this a tight contest. Expect a 2-2 draw with both teams to score.",
+      "model": "enhanced-analysis",
+      "generatedAt": "2025-09-26T12:31:04.544Z"
+    },
+    "timestamp": "2025-09-26T12:31:04.544Z",
+    "automated": true
+  },
+  {
+    "id": "pred_1758889864544_2",
+    "matchId": 1002,
+    "homeTeam": "Manchester City",
+    "awayTeam": "Chelsea",
+    "league": "Premier League",
+    "matchDate": "2025-09-26T12:31:04.544Z",
+    "prediction": {
+      "outcome": "Home Win",
+      "confidence": 78,
+      "analysis": "Manchester City's home dominance is clear. Chelsea struggling with consistency. Expect City to control the game and win 3-1. Over 2.5 goals likely.",
+      "model": "enhanced-analysis",
+      "generatedAt": "2025-09-26T12:31:04.544Z"
+    },
+    "timestamp": "2025-09-26T12:31:04.544Z",
+    "automated": true
+  },
+  {
+    "id": "pred_1758889864544_3",
+    "matchId": 1003,
+    "homeTeam": "Bayern Munich",
+    "awayTeam": "Borussia Dortmund",
+    "league": "Bundesliga",
+    "matchDate": "2025-09-26T12:31:04.544Z",
+    "prediction": {
+      "outcome": "Home Win",
+      "confidence": 85,
+      "analysis": "Der Klassiker favors Bayern at home. Their superior squad depth and home record makes them strong favorites. Expecting a 2-0 or 3-1 victory for Bayern.",
+      "model": "enhanced-analysis",
+      "generatedAt": "2025-09-26T12:31:04.544Z"
+    },
+    "timestamp": "2025-09-26T12:31:04.544Z",
+    "automated": true
+  },
+  {
+    "id": "pred_1758889864544_4",
+    "matchId": 1004,
+    "homeTeam": "Real Madrid",
+    "awayTeam": "Barcelona",
+    "league": "La Liga",
+    "matchDate": "2025-09-26T12:31:04.544Z",
+    "prediction": {
+      "outcome": "Away Win",
+      "confidence": 68,
+      "analysis": "El Clasico at the Bernabeu. Barcelona showing improved form under new tactics. Real Madrid missing key players. This could be Barcelona's chance - 1-2 away win.",
+      "model": "enhanced-analysis",
+      "generatedAt": "2025-09-26T12:31:04.544Z"
+    },
+    "timestamp": "2025-09-26T12:31:04.544Z",
+    "automated": true
+  },
+  {
+    "id": "pred_1758889864544_5",
+    "matchId": 1005,
+    "homeTeam": "Juventus",
+    "awayTeam": "AC Milan",
+    "league": "Serie A",
+    "matchDate": "2025-09-26T12:31:04.544Z",
+    "prediction": {
+      "outcome": "Draw",
+      "confidence": 65,
+      "analysis": "Two Italian giants in rebuilding phases. Both teams evenly matched with similar tactical approaches. Expect a cagey 1-1 draw with limited goal opportunities.",
+      "model": "enhanced-analysis",
+      "generatedAt": "2025-09-26T12:31:04.544Z"
+    },
+    "timestamp": "2025-09-26T12:31:04.544Z",
+    "automated": true
+  }
+]

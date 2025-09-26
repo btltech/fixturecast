@@ -1,0 +1,32 @@
+[
+  {
+    "matchId": 1001,
+    "homeTeam": "Arsenal",
+    "awayTeam": "Liverpool",
+    "timestamp": "2025-09-26T12:31:04.544Z"
+  },
+  {
+    "matchId": 1002,
+    "homeTeam": "Manchester City",
+    "awayTeam": "Chelsea",
+    "timestamp": "2025-09-26T12:31:04.544Z"
+  },
+  {
+    "matchId": 1003,
+    "homeTeam": "Bayern Munich",
+    "awayTeam": "Borussia Dortmund",
+    "timestamp": "2025-09-26T12:31:04.544Z"
+  },
+  {
+    "matchId": 1004,
+    "homeTeam": "Real Madrid",
+    "awayTeam": "Barcelona",
+    "timestamp": "2025-09-26T12:31:04.544Z"
+  },
+  {
+    "matchId": 1005,
+    "homeTeam": "Juventus",
+    "awayTeam": "AC Milan",
+    "timestamp": "2025-09-26T12:31:04.544Z"
+  }
+]
