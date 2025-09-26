@@ -11,8 +11,8 @@ export const handler = async (event) => {
         // Your FixtureCast domain
         const domain = 'fixturecast.com';
         
-        // API key for security - you'll set this in Lambda environment variables
-        const apiKey = process.env.FIXTURECAST_API_KEY || 'temp-dev-key-12345';
+        // API key for security - matches LAMBDA_API_KEY in your app
+        const apiKey = process.env.LAMBDA_API_KEY || 'fixturecast-lambda-secure-2024-key';
         
         // Build the API URL
         const apiUrl = `https://${domain}/api/update-predictions`;
