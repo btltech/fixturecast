@@ -3,118 +3,49 @@
  * Displays prediction accuracy metrics and validation results
  */
 
-import React, { useState } from 'react';
-import { useAppContext } from '../contexts/AppContext';
+import React, { useEffect, useState } from 'react';
 import LoadingSpinner from './LoadingSpinner';
+import { fetchDailyAccuracy, fetchAccuracyTrend } from '../services/accuracyService';
 
 interface AccuracyDashboardProps {
   className?: string;
 }
 
 export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className = '' }) => {
-  const { accuracyStats } = useAppContext();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authInput, setAuthInput] = useState('');
-  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  const [daily, setDaily] = useState<any | null>(null);
+  const [trend, setTrend] = useState<any[]>([]);
 
-  // Admin authentication key (in production, this should be more secure)
-  const ADMIN_KEY = 'fixturecast-admin-2024';
+  const safeAccuracyStats = daily ? {
+    totalPredictions: daily.processed || 0,
+    correctOutcomes: daily.correctOutcome || 0,
+    correctScorelines: daily.correctScore || 0,
+    correctBtts: daily.correctBtts || 0,
+    overallAccuracy: daily.overallAccuracyPct || 0
+  } : { totalPredictions:0, correctOutcomes:0, correctScorelines:0, correctBtts:0, overallAccuracy:0 };
 
-  // Safe access to accuracyStats with fallbacks
-  const safeAccuracyStats = {
-    totalPredictions: accuracyStats?.totalPredictions || 0,
-    correctOutcomes: accuracyStats?.correctOutcomes || 0,
-    correctScorelines: accuracyStats?.correctScorelines || 0,
-    correctBtts: accuracyStats?.correctBtts || 0,
-    correctGoalLine: accuracyStats?.correctGoalLine || 0,
-    correctHtft: accuracyStats?.correctHtft || 0,
-    correctCleanSheet: accuracyStats?.correctCleanSheet || 0,
-    correctCorners: accuracyStats?.correctCorners || 0,
-    overallAccuracy: accuracyStats?.overallAccuracy || 0,
-    recentAccuracy: {
-      last10: accuracyStats?.recentAccuracy?.last10 || 0,
-      last20: accuracyStats?.recentAccuracy?.last20 || 0,
-      last50: accuracyStats?.recentAccuracy?.last50 || 0
-    }
-  };
-
-  // Authentication handler
-  const handleAuth = () => {
-    if (authInput === ADMIN_KEY) {
-      setIsAuthenticated(true);
-      setShowAuthPrompt(false);
-      setAuthInput('');
-      setError(null);
-    } else {
-      setError('❌ Invalid authorization key');
-      setAuthInput('');
-    }
-  };
-
-  // Check if user wants to force check
-  const handleForceCheckRequest = () => {
-    if (!isAuthenticated) {
-      setShowAuthPrompt(true);
-      setError(null);
-    } else {
-      handleForceCheck();
-    }
-  };
-
-  // Force check results (SECURED API call)
-  const handleForceCheck = async () => {
-    if (!isAuthenticated) {
-      setError('❌ Unauthorized: Admin access required');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      console.log('🔄 Authorized manual force check triggered...');
-      
-      // Call the actual automation API with admin context
-      const response = await fetch('/api/update-results', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer fixturecast-lambda-secure-2024-key',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          trigger: 'manual_force_check_authorized',
-          timestamp: new Date().toISOString(),
-          source: 'accuracy_dashboard',
-          admin_authorized: true,
-          auth_level: 'admin'
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Force check failed: ${response.status} ${response.statusText}`);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        setIsLoading(true);
+        const d = await fetchDailyAccuracy();
+        const tr = await fetchAccuracyTrend(7);
+        if (!cancelled) {
+          setDaily(d);
+          setTrend(tr);
+        }
+      } catch (e) {
+        if (!cancelled) setError('Failed to load accuracy data');
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        console.log('✅ Authorized force check completed successfully:', result.results);
-        setError(null); // Clear any previous errors
-        // Show success message
-        setError('✅ Force check completed successfully!');
-        setTimeout(() => setError(null), 3000); // Clear after 3 seconds
-      } else {
-        throw new Error(result.message || 'Force check returned an error');
-      }
-      
-    } catch (err) {
-      console.error('❌ Error during authorized force check:', err?.message || String(err));
-      setError(`Failed to check results: ${err?.message || 'Please try again.'}`);
-    } finally {
-      setIsLoading(false);
     }
-  };
+    load();
+    const interval = setInterval(load, 15 * 60 * 1000); // refresh every 15 minutes
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   // Format time
   const formatTime = (timestamp: number) => {
@@ -184,40 +115,7 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
           <p className="text-gray-400 mt-1">Track and analyze prediction performance</p>
         </div>
         
-        <div className="flex items-center space-x-4">
-          {/* Authentication Status */}
-          {isAuthenticated && (
-            <div className="flex items-center space-x-2 px-3 py-1 bg-green-500/20 text-green-400 border border-green-500/30 rounded-md text-sm">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              <span>Admin</span>
-            </div>
-          )}
-          
-          {/* Force Check Button */}
-          <button
-            onClick={handleForceCheckRequest}
-            disabled={isLoading}
-            className={`px-4 py-2 ${isAuthenticated ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center space-x-2`}
-          >
-            {isLoading && (
-              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            )}
-            {!isAuthenticated && !isLoading && (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6V9a2 2 0 00-2-2H8a2 2 0 00-2 2v2m8 0V9a2 2 0 00-2-2H8a2 2 0 00-2 2v2m8 0H6" />
-              </svg>
-            )}
-            <span>
-              {isLoading ? 'Checking Results...' : 
-               isAuthenticated ? '🔄 Manual Update' : '🔒 Admin Update'}
-            </span>
-          </button>
-        </div>
+        <div className="text-sm text-gray-400">Data auto-refreshes every 15 min</div>
       </div>
 
       {/* Status Indicators */}
@@ -225,8 +123,8 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
         <div className="bg-gray-800 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">Last Check</p>
-              <p className="text-lg font-semibold text-white">Never</p>
+              <p className="text-sm text-gray-400">Data Date (UTC)</p>
+              <p className="text-lg font-semibold text-white">{daily?.date || '—'}</p>
             </div>
             <div className="w-3 h-3 rounded-full bg-gray-400" />
           </div>
@@ -235,8 +133,8 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
         <div className="bg-gray-800 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">Next Check</p>
-              <p className="text-lg font-semibold text-white">Not scheduled</p>
+              <p className="text-sm text-gray-400">Overall Accuracy</p>
+              <p className="text-lg font-semibold text-white">{safeAccuracyStats.overallAccuracy.toFixed(1)}%</p>
             </div>
             <div className="w-3 h-3 rounded-full bg-green-400" />
           </div>
@@ -279,152 +177,65 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
           </div>
           
           <div className="bg-gray-800 rounded-lg p-4">
-            <p className="text-sm text-gray-400">Recent Accuracy (Last 10)</p>
-            <p className={`text-2xl font-bold ${getAccuracyColor(safeAccuracyStats.recentAccuracy.last10)}`}>
-              {formatPercentage(safeAccuracyStats.recentAccuracy.last10)}
-            </p>
+              <p className="text-sm text-gray-400">BTTS Correct</p>
+              <p className="text-2xl font-bold text-white">{safeAccuracyStats.correctBtts}</p>
           </div>
         </div>
 
-        {/* Category Accuracy */}
-        <div className="mb-6">
-          <h4 className="text-lg font-semibold text-white mb-4">Category Accuracy</h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-400">Winner Predictions</p>
-              <p className={`text-xl font-bold ${getAccuracyColor(safeAccuracyStats.totalPredictions > 0 ? (safeAccuracyStats.correctOutcomes / safeAccuracyStats.totalPredictions) * 100 : 0)}`}>
-                {formatPercentage(safeAccuracyStats.totalPredictions > 0 ? (safeAccuracyStats.correctOutcomes / safeAccuracyStats.totalPredictions) * 100 : 0)}
-              </p>
-            </div>
-            <div className="bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-400">Scoreline Predictions</p>
-              <p className={`text-xl font-bold ${getAccuracyColor(safeAccuracyStats.totalPredictions > 0 ? (safeAccuracyStats.correctScorelines / safeAccuracyStats.totalPredictions) * 100 : 0)}`}>
-                {formatPercentage(safeAccuracyStats.totalPredictions > 0 ? (safeAccuracyStats.correctScorelines / safeAccuracyStats.totalPredictions) * 100 : 0)}
-              </p>
-            </div>
-            <div className="bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-400">BTTS Predictions</p>
-              <p className={`text-xl font-bold ${getAccuracyColor(safeAccuracyStats.totalPredictions > 0 ? (safeAccuracyStats.correctBtts / safeAccuracyStats.totalPredictions) * 100 : 0)}`}>
-                {formatPercentage(safeAccuracyStats.totalPredictions > 0 ? (safeAccuracyStats.correctBtts / safeAccuracyStats.totalPredictions) * 100 : 0)}
-              </p>
-            </div>
-            <div className="bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-400">Goal Line Predictions</p>
-              <p className={`text-xl font-bold ${getAccuracyColor(safeAccuracyStats.totalPredictions > 0 ? (safeAccuracyStats.correctGoalLine / safeAccuracyStats.totalPredictions) * 100 : 0)}`}>
-                {formatPercentage(safeAccuracyStats.totalPredictions > 0 ? (safeAccuracyStats.correctGoalLine / safeAccuracyStats.totalPredictions) * 100 : 0)}
-              </p>
+        {/* League Breakdown */}
+        {daily?.leagueBreakdown && daily.leagueBreakdown.length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-lg font-semibold text-white mb-4">Top Leagues (by overall accuracy)</h4>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-gray-400 text-left">
+                    <th className="py-2 pr-4">League</th>
+                    <th className="py-2 pr-4">Matches</th>
+                    <th className="py-2 pr-4">Outcome %</th>
+                    <th className="py-2 pr-4">Score %</th>
+                    <th className="py-2 pr-4">BTTS %</th>
+                    <th className="py-2 pr-4">Overall %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {daily.leagueBreakdown.slice(0,10).map((l:any) => (
+                    <tr key={l.leagueId} className="border-t border-gray-700">
+                      <td className="py-2 pr-4 text-white whitespace-nowrap">{l.league}</td>
+                      <td className="py-2 pr-4">{l.processed}</td>
+                      <td className="py-2 pr-4">{l.outcomeAccuracyPct.toFixed(0)}%</td>
+                      <td className="py-2 pr-4">{l.exactScoreAccuracyPct.toFixed(0)}%</td>
+                      <td className="py-2 pr-4">{l.bttsAccuracyPct.toFixed(0)}%</td>
+                      <td className="py-2 pr-4 font-semibold">{l.overallAccuracyPct.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Recent Performance */}
-        <div className="mb-6">
-          <h4 className="text-lg font-semibold text-white mb-4">Recent Performance</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-400">Last 10 Predictions</p>
-              <p className={`text-2xl font-bold ${getAccuracyColor(safeAccuracyStats.recentAccuracy.last10)}`}>
-                {formatPercentage(safeAccuracyStats.recentAccuracy.last10)}
-              </p>
-            </div>
-            <div className="bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-400">Last 20 Predictions</p>
-              <p className={`text-2xl font-bold ${getAccuracyColor(safeAccuracyStats.recentAccuracy.last20)}`}>
-                {formatPercentage(safeAccuracyStats.recentAccuracy.last20)}
-              </p>
-            </div>
-            <div className="bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-400">Last 50 Predictions</p>
-              <p className={`text-2xl font-bold ${getAccuracyColor(safeAccuracyStats.recentAccuracy.last50)}`}>
-                {formatPercentage(safeAccuracyStats.recentAccuracy.last50)}
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* Removed legacy recent performance section (worker does not supply last10/20/50 yet) */}
       </div>
 
-      {/* Validation History */}
-      <div>
-        <h3 className="text-lg font-semibold text-white mb-4">
-          Validation History
-        </h3>
-        
-        <div className="bg-gray-800 rounded-lg p-6 text-center">
-          <div className="text-gray-400 text-4xl mb-2">📊</div>
-          <p className="text-gray-300">No validation history available yet</p>
-          <p className="text-sm text-gray-500 mt-1">Results will appear here after matches are completed</p>
+      {/* Trend */}
+      <div className="mt-8">
+        <h3 className="text-lg font-semibold text-white mb-4">7-Day Trend</h3>
+        <div className="bg-gray-800 rounded-lg p-4 overflow-x-auto">
+          {trend.length === 0 && <p className="text-gray-400 text-sm">No trend data yet.</p>}
+          {trend.length > 0 && (
+            <div className="flex space-x-6">
+              {trend.map(p => (
+                <div key={p.date} className="text-center">
+                  <div className="text-xs text-gray-400 mb-1">{p.date}</div>
+                  <div className="text-sm font-semibold text-white">{p.overallAccuracyPct === null ? '—' : p.overallAccuracyPct.toFixed(1)+'%'}</div>
+                  <div className="text-[10px] text-gray-500">{p.processed} matches</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Authentication Modal */}
-      {showAuthPrompt && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-white flex items-center">
-                <svg className="w-5 h-5 mr-2 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6V9a2 2 0 00-2-2H8a2 2 0 00-2 2v2m8 0V9a2 2 0 00-2-2H8a2 2 0 00-2 2v2m8 0H6" />
-                </svg>
-                Admin Authorization Required
-              </h3>
-              <button
-                onClick={() => setShowAuthPrompt(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <p className="text-gray-300 mb-3">
-                🔒 The Force Check feature is restricted to authorized administrators only.
-              </p>
-              <p className="text-sm text-gray-400 mb-4">
-                This prevents unauthorized manual updates and protects system integrity.
-              </p>
-              
-              <input
-                type="password"
-                placeholder="Enter admin authorization key"
-                value={authInput}
-                onChange={(e) => setAuthInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                autoFocus
-              />
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={handleAuth}
-                disabled={!authInput.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-md transition-colors flex items-center justify-center"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                </svg>
-                Authorize
-              </button>
-              <button
-                onClick={() => {
-                  setShowAuthPrompt(false);
-                  setAuthInput('');
-                  setError(null);
-                }}
-                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-
-            {error && error.includes('Invalid') && (
-              <div className="mt-3 p-3 bg-red-500/20 border border-red-500/30 rounded-md">
-                <p className="text-red-400 text-sm">{error}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

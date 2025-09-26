@@ -1,3 +1,53 @@
+// Frontend Accuracy Service - uses worker endpoints as source of truth
+export interface DailyAccuracyStats {
+  date: string;
+  processed: number;
+  outcomeAccuracyPct: number;
+  exactScoreAccuracyPct: number;
+  bttsAccuracyPct: number;
+  overallAccuracyPct: number;
+  leagueBreakdown?: any[];
+  processedAt?: string;
+}
+
+export interface AccuracyTrendPoint {
+  date: string;
+  overallAccuracyPct: number | null;
+  processed: number;
+}
+
+const WORKER_BASE = 'https://fixturecast-cron-worker.btltech.workers.dev';
+
+async function safeJson(res: Response) {
+  try { return await res.json(); } catch { return null; }
+}
+
+export async function fetchDailyAccuracy(date?: string): Promise<DailyAccuracyStats | null> {
+  const url = `${WORKER_BASE}/accuracy/today${date ? `?date=${date}` : ''}`;
+  try {
+    const res = await fetch(url, { headers: { 'Accept':'application/json' }});
+    if (!res.ok) return null;
+    const data = await safeJson(res);
+    if (!data || !data.stats) return null;
+    return data.stats as DailyAccuracyStats;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchAccuracyTrend(days: number = 7): Promise<AccuracyTrendPoint[]> {
+  try {
+    const res = await fetch(`${WORKER_BASE}/accuracy/trend?days=${days}`, { headers: { 'Accept':'application/json' }});
+    if (!res.ok) return [];
+    const data = await safeJson(res);
+    return data?.trend || [];
+  } catch { return []; }
+}
+
+export const accuracyService = {
+  fetchDailyAccuracy,
+  fetchAccuracyTrend
+};
 import { Prediction, PredictionAccuracy, AccuracyStats, Match } from '../types';
 import { cloudPredictionService } from './cloudPredictionService';
 

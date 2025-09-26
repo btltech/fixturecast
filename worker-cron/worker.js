@@ -100,6 +100,30 @@ export default {
       }
     }
 
+    // Accuracy trend (last 7 days): /accuracy/trend
+    if (url.pathname === '/accuracy/trend') {
+      try {
+        if (!env.PREDICTIONS_KV) return new Response(JSON.stringify({ error: 'KV unavailable'}), { status: 500, headers: { 'Content-Type':'application/json', ...cors }});
+        const days = parseInt(url.searchParams.get('days') || '7', 10);
+        const today = new Date();
+        const result = [];
+        for (let i=1; i<=days; i++) { // use past completed days
+          const d = new Date(today.getTime() - i*24*60*60*1000);
+            const ds = d.toISOString().slice(0,10);
+            const aggKey = `accuracy:${ds}:aggregate`;
+            const data = await env.PREDICTIONS_KV.get(aggKey, 'json');
+            if (data && data.stats) {
+              result.push({ date: ds, overallAccuracyPct: data.stats.overallAccuracyPct, processed: data.stats.processed });
+            } else {
+              result.push({ date: ds, overallAccuracyPct: null, processed: 0 });
+            }
+        }
+        return new Response(JSON.stringify({ days: result.length, trend: result.reverse() }), { headers: { 'Content-Type':'application/json', ...cors }});
+      } catch (e) {
+        return new Response(JSON.stringify({ error: 'internal', message: e.message }), { status: 500, headers: { 'Content-Type':'application/json', ...cors }});
+      }
+    }
+
     if (url.pathname === '/trigger-predictions') {
       try {
         const result = await triggerPredictionUpdate(env);
@@ -511,6 +535,8 @@ async function computeAndPersistAccuracy(kv, finishedMatches, dateStr) {
   let correctOutcome = 0;
   let correctScore = 0;
   let correctBtts = 0;
+  // League aggregation map
+  const leagueMap = new Map(); // leagueId -> { leagueId, league, processed, correctOutcome, correctScore, correctBtts }
   for (const m of finishedMatches) {
     // Try structured first (unknown model/data versions -> scan probable versions?) We only stored one modelVersion per day (gemini-2.5-flash + dateStr as dataVersion)
     const structuredKey = `pred:${m.fixtureId}:gemini-2.5-flash:${dateStr}`;
@@ -540,6 +566,16 @@ async function computeAndPersistAccuracy(kv, finishedMatches, dateStr) {
     if (outcomeCorrect) correctOutcome++;
     if (scoreCorrect) correctScore++;
     if (bttsCorrect) correctBtts += bttsCorrect ? 1 : 0;
+    // League accumulation
+    const lid = m.leagueId || 'unknown';
+    if (!leagueMap.has(lid)) {
+      leagueMap.set(lid, { leagueId: lid, league: m.league || 'Unknown', processed: 0, correctOutcome: 0, correctScore: 0, correctBtts: 0 });
+    }
+    const bucket = leagueMap.get(lid);
+    bucket.processed += 1;
+    if (outcomeCorrect) bucket.correctOutcome += 1;
+    if (scoreCorrect) bucket.correctScore += 1;
+    if (bttsCorrect) bucket.correctBtts += bttsCorrect ? 1 : 0;
     const matchAccuracy = calculateWeightedAccuracy(outcomeCorrect, scoreCorrect, bttsCorrect);
     const record = {
       fixtureId: m.fixtureId,
@@ -561,6 +597,15 @@ async function computeAndPersistAccuracy(kv, finishedMatches, dateStr) {
     await kv.put(`accuracy:${dateStr}:fixture:${m.fixtureId}`, JSON.stringify(record));
   }
   const total = perFixture.length;
+  // Build league breakdown array
+  const leagueBreakdown = Array.from(leagueMap.values()).map(l => ({
+    ...l,
+    outcomeAccuracyPct: l.processed ? (l.correctOutcome / l.processed) * 100 : 0,
+    exactScoreAccuracyPct: l.processed ? (l.correctScore / l.processed) * 100 : 0,
+    bttsAccuracyPct: l.processed ? (l.correctBtts / l.processed) * 100 : 0,
+    overallAccuracyPct: l.processed ? ((l.correctOutcome*3 + l.correctScore*5 + l.correctBtts*2) / (l.processed * 10)) * 100 : 0
+  })).sort((a,b)=> b.overallAccuracyPct - a.overallAccuracyPct);
+
   const aggregate = {
     date: dateStr,
     processed: total,
@@ -571,7 +616,8 @@ async function computeAndPersistAccuracy(kv, finishedMatches, dateStr) {
     exactScoreAccuracyPct: total ? (correctScore/total)*100 : 0,
     bttsAccuracyPct: (perFixture.filter(r=>r.bttsCorrect!==null).length ? (correctBtts / perFixture.filter(r=>r.bttsCorrect!==null).length)*100 : 0),
     overallAccuracyPct: total ? perFixture.reduce((s,r)=>s+r.accuracy,0)/total : 0,
-    processedAt: new Date().toISOString()
+    processedAt: new Date().toISOString(),
+    leagueBreakdown: leagueBreakdown.slice(0, 50)
   };
   await kv.put(`accuracy:${dateStr}:aggregate`, JSON.stringify({ stats: aggregate, fixtures: perFixture.slice(0, 50) }));
   return { ...aggregate, fixturesStored: perFixture.length };
