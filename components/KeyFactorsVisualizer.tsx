@@ -2,7 +2,8 @@ import React from 'react';
 import { KeyFactor } from '../types';
 
 interface KeyFactorsVisualizerProps {
-  factors: KeyFactor[];
+  // Made optional so callers passing undefined (when prediction lacks factors) won't crash
+  factors?: KeyFactor[];
 }
 
 // Icon components defined within the file for simplicity
@@ -62,11 +63,21 @@ const getVisualForFactor = (text: string) => {
 };
 
 const KeyFactorsVisualizer: React.FC<KeyFactorsVisualizerProps> = ({ factors }) => {
+  const safeFactors: KeyFactor[] = Array.isArray(factors) ? factors : [];
+
+  if (safeFactors.length === 0) {
+    return (
+      <div className="bg-gray-800/60 p-4 rounded-lg text-sm text-gray-400 border border-gray-700/50">
+        No key factors available for this prediction.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {factors.map((factorGroup, index) => (
+      {safeFactors.map((factorGroup, index) => (
         <div key={index} className="bg-gray-800/60 p-4 rounded-lg">
-          <h4 className="font-semibold text-gray-200 mb-3 border-b border-gray-700 pb-2">{factorGroup.category}</h4>
+          <h4 className="font-semibold text-gray-200 mb-3 border-b border-gray-700 pb-2">{factorGroup.category || 'General Factors'}</h4>
           <div className="space-y-3">
             {(factorGroup.points ?? []).map((point, pIndex) => {
               const { icon, color } = getVisualForFactor(point);

@@ -209,13 +209,13 @@ const LocalPrediction: React.FC<LocalPredictionProps> = ({ match, context }) => 
             </div>
 
             {/* Key Factors */}
-            {prediction.keyFactors && prediction.keyFactors.length > 0 && (
+            {Array.isArray(prediction.keyFactors) && prediction.keyFactors.length > 0 && (
               <div className="mb-4">
                 <h4 className="text-lg font-semibold text-green-300 mb-2">Key Analysis Factors</h4>
                 <div className="bg-gray-800 p-3 rounded">
                   <ul className="text-sm text-gray-300 space-y-1">
-                    {prediction.keyFactors.map((factor, index) => (
-                      <li key={index}>• {String(factor)}</li>
+                    {prediction.keyFactors.map((factor: any, index) => (
+                      <li key={index}>• {typeof factor === 'string' ? factor : factor?.factor || factor?.category || JSON.stringify(factor)}</li>
                     ))}
                   </ul>
                 </div>

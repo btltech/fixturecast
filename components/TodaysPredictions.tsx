@@ -45,12 +45,8 @@ const TodaysPredictions: React.FC = () => {
     }
   };
 
-  const getLeagueDisplay = (matchLeague?: string) => {
-    if (matchLeague) return matchLeague;
-    const homeLeague = teams[match.homeTeam]?.league;
-    const awayLeague = teams[match.awayTeam]?.league;
-    return homeLeague || awayLeague || 'League unknown';
-  };
+  // TODO: refine league detection if required; current implementation unused & referenced undefined variable
+  const getLeagueDisplay = (matchLeague?: string) => matchLeague || 'League unknown';
 
   const togglePredictionExpansion = (matchId: string) => {
     setExpandedPredictions(prev => {
@@ -193,16 +189,20 @@ const TodaysPredictions: React.FC = () => {
                           <h3 className="text-lg font-semibold text-white mb-3">Detailed Prediction Analysis</h3>
                           
                           {/* Key Factors */}
-                          {prediction.keyFactors && prediction.keyFactors.length > 0 && (
+                          {Array.isArray(prediction.keyFactors) && prediction.keyFactors.length > 0 && (
                             <div>
                               <h4 className="text-sm font-semibold text-blue-300 mb-2">Key Factors</h4>
                               <div className="space-y-2">
-                                {prediction.keyFactors.map((factor, index) => (
-                                  <div key={index} className="bg-gray-800/50 rounded p-2 text-sm">
-                                    <div className="font-medium text-white">{factor.factor}</div>
-                                    <div className="text-gray-300">{factor.impact}</div>
-                                  </div>
-                                ))}
+                                {prediction.keyFactors.map((factor: any, index) => {
+                                  const title = factor?.factor || factor?.category || `Factor ${index + 1}`;
+                                  const impact = factor?.impact || (Array.isArray(factor?.points) ? factor.points.join('; ') : factor?.description || '');
+                                  return (
+                                    <div key={index} className="bg-gray-800/50 rounded p-2 text-sm">
+                                      <div className="font-medium text-white">{title}</div>
+                                      {impact && <div className="text-gray-300">{impact}</div>}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -210,13 +210,16 @@ const TodaysPredictions: React.FC = () => {
                           {/* Goal Line Prediction */}
                           {prediction.goalLine && (
                             <div>
-                              <h4 className="text-sm font-semibold text-green-300 mb-2">Goal Line Prediction</h4>
-                              <div className="bg-gray-800/50 rounded p-3">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-white">Over/Under {prediction.goalLine.line}</span>
-                                  <span className="text-green-300 font-bold">{prediction.goalLine.probability}%</span>
+                              <h4 className="text-sm font-semibold text-green-300 mb-2">Goal Line (O/U {prediction.goalLine.line})</h4>
+                              <div className="bg-gray-800/50 rounded p-3 grid grid-cols-2 gap-3 text-center">
+                                <div>
+                                  <div className="text-xs text-gray-400">Over</div>
+                                  <div className="text-green-300 font-bold">{prediction.goalLine.overProbability}%</div>
                                 </div>
-                                <div className="text-xs text-gray-400 mt-1">{prediction.goalLine.reasoning}</div>
+                                <div>
+                                  <div className="text-xs text-gray-400">Under</div>
+                                  <div className="text-green-300 font-bold">{prediction.goalLine.underProbability}%</div>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -225,12 +228,15 @@ const TodaysPredictions: React.FC = () => {
                           {prediction.btts && (
                             <div>
                               <h4 className="text-sm font-semibold text-yellow-300 mb-2">Both Teams to Score</h4>
-                              <div className="bg-gray-800/50 rounded p-3">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-white">{prediction.btts.prediction ? 'Yes' : 'No'}</span>
-                                  <span className="text-yellow-300 font-bold">{prediction.btts.probability}%</span>
+                              <div className="bg-gray-800/50 rounded p-3 grid grid-cols-2 gap-3 text-center">
+                                <div>
+                                  <div className="text-xs text-gray-400">Yes</div>
+                                  <div className="text-yellow-300 font-bold">{prediction.btts.yesProbability}%</div>
                                 </div>
-                                <div className="text-xs text-gray-400 mt-1">{prediction.btts.reasoning}</div>
+                                <div>
+                                  <div className="text-xs text-gray-400">No</div>
+                                  <div className="text-yellow-300 font-bold">{prediction.btts.noProbability}%</div>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -238,13 +244,17 @@ const TodaysPredictions: React.FC = () => {
                           {/* HT/FT Prediction */}
                           {prediction.htft && (
                             <div>
-                              <h4 className="text-sm font-semibold text-purple-300 mb-2">Half Time / Full Time</h4>
-                              <div className="bg-gray-800/50 rounded p-3">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-white">{prediction.htft.prediction}</span>
-                                  <span className="text-purple-300 font-bold">{prediction.htft.probability}%</span>
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1">{prediction.htft.reasoning}</div>
+                              <h4 className="text-sm font-semibold text-purple-300 mb-2">Half Time / Full Time (Selected)</h4>
+                              <div className="bg-gray-800/50 rounded p-3 text-xs grid grid-cols-3 gap-2">
+                                <div>H/H: {prediction.htft.homeHome}%</div>
+                                <div>H/D: {prediction.htft.homeDraw}%</div>
+                                <div>H/A: {prediction.htft.homeAway}%</div>
+                                <div>D/H: {prediction.htft.drawHome}%</div>
+                                <div>D/D: {prediction.htft.drawDraw}%</div>
+                                <div>D/A: {prediction.htft.drawAway}%</div>
+                                <div>A/H: {prediction.htft.awayHome}%</div>
+                                <div>A/D: {prediction.htft.awayDraw}%</div>
+                                <div>A/A: {prediction.htft.awayAway}%</div>
                               </div>
                             </div>
                           )}
@@ -252,13 +262,20 @@ const TodaysPredictions: React.FC = () => {
                           {/* Score Range */}
                           {prediction.scoreRange && (
                             <div>
-                              <h4 className="text-sm font-semibold text-orange-300 mb-2">Score Range</h4>
-                              <div className="bg-gray-800/50 rounded p-3">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-white">{prediction.scoreRange.range}</span>
-                                  <span className="text-orange-300 font-bold">{prediction.scoreRange.probability}%</span>
+                              <h4 className="text-sm font-semibold text-orange-300 mb-2">Score Range Probabilities</h4>
+                              <div className="bg-gray-800/50 rounded p-3 grid grid-cols-3 gap-2 text-center text-xs">
+                                <div>
+                                  <div className="text-gray-400">0-1</div>
+                                  <div className="text-orange-300 font-bold">{prediction.scoreRange.zeroToOne}%</div>
                                 </div>
-                                <div className="text-xs text-gray-400 mt-1">{prediction.scoreRange.reasoning}</div>
+                                <div>
+                                  <div className="text-gray-400">2-3</div>
+                                  <div className="text-orange-300 font-bold">{prediction.scoreRange.twoToThree}%</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">4+</div>
+                                  <div className="text-orange-300 font-bold">{prediction.scoreRange.fourPlus}%</div>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -266,13 +283,20 @@ const TodaysPredictions: React.FC = () => {
                           {/* First Goalscorer */}
                           {prediction.firstGoalscorer && (
                             <div>
-                              <h4 className="text-sm font-semibold text-pink-300 mb-2">First Goalscorer</h4>
-                              <div className="bg-gray-800/50 rounded p-3">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-white">{prediction.firstGoalscorer.player}</span>
-                                  <span className="text-pink-300 font-bold">{prediction.firstGoalscorer.probability}%</span>
+                              <h4 className="text-sm font-semibold text-pink-300 mb-2">First Goalscorer Probabilities</h4>
+                              <div className="bg-gray-800/50 rounded p-3 grid grid-cols-3 gap-2 text-center text-xs">
+                                <div>
+                                  <div className="text-gray-400">Home</div>
+                                  <div className="text-pink-300 font-bold">{prediction.firstGoalscorer.homeTeam}%</div>
                                 </div>
-                                <div className="text-xs text-gray-400 mt-1">{prediction.firstGoalscorer.reasoning}</div>
+                                <div>
+                                  <div className="text-gray-400">Away</div>
+                                  <div className="text-pink-300 font-bold">{prediction.firstGoalscorer.awayTeam}%</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">No Goal</div>
+                                  <div className="text-pink-300 font-bold">{prediction.firstGoalscorer.noGoalscorer}%</div>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -280,13 +304,16 @@ const TodaysPredictions: React.FC = () => {
                           {/* Clean Sheet */}
                           {prediction.cleanSheet && (
                             <div>
-                              <h4 className="text-sm font-semibold text-cyan-300 mb-2">Clean Sheet</h4>
-                              <div className="bg-gray-800/50 rounded p-3">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-white">{prediction.cleanSheet.team} - {prediction.cleanSheet.prediction ? 'Yes' : 'No'}</span>
-                                  <span className="text-cyan-300 font-bold">{prediction.cleanSheet.probability}%</span>
+                              <h4 className="text-sm font-semibold text-cyan-300 mb-2">Clean Sheet Probabilities</h4>
+                              <div className="bg-gray-800/50 rounded p-3 grid grid-cols-2 gap-3 text-center text-xs">
+                                <div>
+                                  <div className="text-gray-400">Home CS</div>
+                                  <div className="text-cyan-300 font-bold">{prediction.cleanSheet.homeTeam}%</div>
                                 </div>
-                                <div className="text-xs text-gray-400 mt-1">{prediction.cleanSheet.reasoning}</div>
+                                <div>
+                                  <div className="text-gray-400">Away CS</div>
+                                  <div className="text-cyan-300 font-bold">{prediction.cleanSheet.awayTeam}%</div>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -294,13 +321,16 @@ const TodaysPredictions: React.FC = () => {
                           {/* Corners */}
                           {prediction.corners && (
                             <div>
-                              <h4 className="text-sm font-semibold text-indigo-300 mb-2">Corners</h4>
-                              <div className="bg-gray-800/50 rounded p-3">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-white">{prediction.corners.prediction}</span>
-                                  <span className="text-indigo-300 font-bold">{prediction.corners.probability}%</span>
+                              <h4 className="text-sm font-semibold text-indigo-300 mb-2">Corners (O/U 9.5)</h4>
+                              <div className="bg-gray-800/50 rounded p-3 grid grid-cols-2 gap-3 text-center text-xs">
+                                <div>
+                                  <div className="text-gray-400">Over 9.5</div>
+                                  <div className="text-indigo-300 font-bold">{prediction.corners.over}%</div>
                                 </div>
-                                <div className="text-xs text-gray-400 mt-1">{prediction.corners.reasoning}</div>
+                                <div>
+                                  <div className="text-gray-400">Under 9.5</div>
+                                  <div className="text-indigo-300 font-bold">{prediction.corners.under}%</div>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -308,17 +338,15 @@ const TodaysPredictions: React.FC = () => {
                           {/* Expected Goals */}
                           {prediction.expectedGoals && (
                             <div>
-                              <h4 className="text-sm font-semibold text-emerald-300 mb-2">Expected Goals</h4>
-                              <div className="bg-gray-800/50 rounded p-3">
-                                <div className="grid grid-cols-2 gap-4 text-center">
-                                  <div>
-                                    <div className="text-xs text-gray-400">Home xG</div>
-                                    <div className="text-emerald-300 font-bold">{prediction.expectedGoals.home}</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-xs text-gray-400">Away xG</div>
-                                    <div className="text-emerald-300 font-bold">{prediction.expectedGoals.away}</div>
-                                  </div>
+                              <h4 className="text-sm font-semibold text-emerald-300 mb-2">Expected Goals (xG)</h4>
+                              <div className="bg-gray-800/50 rounded p-3 grid grid-cols-2 gap-4 text-center">
+                                <div>
+                                  <div className="text-xs text-gray-400">Home xG</div>
+                                  <div className="text-emerald-300 font-bold">{prediction.expectedGoals.homeXg}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-400">Away xG</div>
+                                  <div className="text-emerald-300 font-bold">{prediction.expectedGoals.awayXg}</div>
                                 </div>
                               </div>
                             </div>
@@ -344,16 +372,18 @@ const TodaysPredictions: React.FC = () => {
                           {prediction.uncertaintyMetrics && (
                             <div>
                               <h4 className="text-sm font-semibold text-red-300 mb-2">Uncertainty Analysis</h4>
-                              <div className="bg-gray-800/50 rounded p-3">
-                                <div className="grid grid-cols-2 gap-4 text-center">
-                                  <div>
-                                    <div className="text-xs text-gray-400">Variance</div>
-                                    <div className="text-red-300 font-bold">{prediction.uncertaintyMetrics.variance}%</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-xs text-gray-400">Risk Level</div>
-                                    <div className="text-red-300 font-bold">{prediction.uncertaintyMetrics.riskLevel}</div>
-                                  </div>
+                              <div className="bg-gray-800/50 rounded p-3 grid grid-cols-3 gap-4 text-center text-xs">
+                                <div>
+                                  <div className="text-gray-400">Variance</div>
+                                  <div className="text-red-300 font-bold">{prediction.uncertaintyMetrics.predictionVariance}%</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">Data Quality</div>
+                                  <div className="text-red-300 font-bold">{prediction.uncertaintyMetrics.dataQuality}</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">Agreement</div>
+                                  <div className="text-red-300 font-bold">{prediction.uncertaintyMetrics.modelAgreement}%</div>
                                 </div>
                               </div>
                             </div>

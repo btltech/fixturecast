@@ -238,15 +238,15 @@ const PredictionDetail: React.FC<PredictionDetailProps> = ({ onNavigate }) => {
       )}
 
       {/* Key Factors Analysis */}
-      {prediction.prediction?.keyFactors && (
+      {Array.isArray(prediction.prediction?.keyFactors) && prediction.prediction!.keyFactors!.length > 0 && (
         <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
           <h3 className="text-lg font-bold text-white mb-4">🧠 AI Analysis & Key Factors</h3>
           <div className="space-y-6">
-            {prediction.prediction.keyFactors.map((factor: any, index: number) => (
+            {(prediction.prediction?.keyFactors || []).map((factor: any, index: number) => (
               <div key={index} className="border-l-4 border-blue-500 pl-4">
-                <h4 className="font-semibold text-blue-400 mb-2">{factor.category}</h4>
+                <h4 className="font-semibold text-blue-400 mb-2">{factor.category || 'General'}</h4>
                 <ul className="space-y-2">
-                  {factor.points.map((point: string, pointIndex: number) => (
+                  {(factor.points || []).map((point: string, pointIndex: number) => (
                     <li key={pointIndex} className="text-gray-300 text-sm leading-relaxed">
                       • {point}
                     </li>

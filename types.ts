@@ -316,7 +316,8 @@ export interface Prediction {
   awayWinProbability: number;
   predictedScoreline: string;
   confidence: ConfidenceLevel;
-  keyFactors: KeyFactor[];
+  // Some generated predictions may omit keyFactors; make optional to avoid runtime crashes
+  keyFactors?: KeyFactor[];
   goalLine: GoalLinePrediction;
   btts?: BTTSPrediction;
   htft?: HTFTPrediction;
