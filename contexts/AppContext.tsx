@@ -4,7 +4,7 @@ import { Match, Prediction, Toast as ToastType, Alert, PastPrediction, Team, Lea
 import { getMatchPrediction } from '../services/geminiService';
 import { buildContextForMatch } from '../utils/contextUtils';
 import { getAllKnownTeams, getTeamData } from '../services/teamDataService';
-import { calculatePredictionAccuracy, calculateAccuracyStats, formatAccuracyDisplay, getLiveAccuracyStats, checkAndUpdateMatchResults } from '../services/accuracyService';
+import { calculatePredictionAccuracy, calculateAccuracyStats, formatAccuracyDisplay, getLiveAccuracyStats, checkAndUpdateMatchResults, getStoredAccuracyData } from '../services/accuracyService';
 import { autoPredictionService } from '../services/autoPredictionService';
 import { getLiveMatches, getLiveMatchUpdates, isMatchLive } from '../services/liveMatchService';
 import { getFormAnalysis } from '../services/formAnalysisService';
@@ -160,12 +160,10 @@ export const AppProvider: React.FC<{ children: ReactNode; value?: Partial<AppCon
             const fRaw = window.localStorage.getItem(FIXTURES_CACHE_KEY);
             const tRaw = window.localStorage.getItem(TABLES_CACHE_KEY);
             const teamsRaw = window.localStorage.getItem(TEAMS_CACHE_KEY);
-            const accuracyRaw = window.localStorage.getItem(ACCURACY_CACHE_KEY);
             
             const cachedFixtures: Match[] = fRaw ? JSON.parse(fRaw) : [];
             const cachedTables: { [key in League]?: LeagueTableRow[] } = tRaw ? JSON.parse(tRaw) : {};
             const cachedTeams: { [key: string]: Team } = teamsRaw ? JSON.parse(teamsRaw) : {};
-            const cachedAccuracy: PredictionAccuracy[] = accuracyRaw ? JSON.parse(accuracyRaw) : [];
             
             if (Array.isArray(cachedFixtures) && cachedFixtures.length > 0) {
                 setAppData(prev => ({ ...prev, fixtures: cachedFixtures }));
@@ -176,10 +174,15 @@ export const AppProvider: React.FC<{ children: ReactNode; value?: Partial<AppCon
             if (cachedTeams && Object.keys(cachedTeams).length > 0) {
                 setAppData(prev => ({ ...prev, teams: cachedTeams }));
             }
-            if (cachedAccuracy && cachedAccuracy.length > 0) {
-                setAccuracyRecords(cachedAccuracy);
-                const stats = calculateAccuracyStats(cachedAccuracy);
+
+            // Load accuracy data using the enhanced accuracy service
+            // This will automatically load historical data if needed
+            const accuracyData = getStoredAccuracyData();
+            if (accuracyData && accuracyData.length > 0) {
+                setAccuracyRecords(accuracyData);
+                const stats = calculateAccuracyStats(accuracyData);
                 setAccuracyStats(stats);
+                console.log(`✅ Loaded ${accuracyData.length} accuracy records from enhanced accuracy service`);
             }
         } catch (error) {
             console.warn('Failed to load cached data:', error);
