@@ -8,8 +8,8 @@ export const handler = async (event) => {
     console.log('⚽ EventBridge triggered match check at:', new Date().toISOString());
     
     try {
-        // Your FixtureCast domain
-        const domain = 'fixturecast.com';
+        // Your FixtureCast domain (with www redirect)
+        const domain = 'www.fixturecast.com';
         
         // API key for security - matches LAMBDA_API_KEY in your app
         const apiKey = process.env.LAMBDA_API_KEY || 'fixturecast-lambda-secure-2024-key';
