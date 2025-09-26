@@ -1,0 +1,59 @@
+name: 📊 Hourly Score Updates
+on:
+  schedule:
+    # Update scores every hour to track prediction accuracy
+    - cron: '15 * * * *'  # 15 minutes past every hour
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual trigger'
+        required: false
+        default: 'Manual score update'
+
+jobs:
+  update-scores:
+    runs-on: ubuntu-latest
+    name: Update Match Results & Accuracy
+    
+    steps:
+      - name: 🔄 Update Match Scores
+        run: |
+          echo "📊 Triggering score updates for accuracy tracking..."
+          
+          response=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \
+            "https://fixturecast.pages.dev/api/update-scores" \
+            -H "Authorization: Bearer ${{ secrets.PREDICTION_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: GitHub-Actions-Cron/1.0")
+          
+          http_code=$(echo "$response" | grep "HTTP_CODE:" | cut -d: -f2)
+          body=$(echo "$response" | sed '/HTTP_CODE:/d')
+          
+          echo "📊 Response Code: $http_code"
+          echo "📋 Response Body: $body"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Score updates completed successfully!"
+            
+            # Parse JSON response to show stats
+            if command -v jq >/dev/null 2>&1; then
+              updated_matches=$(echo "$body" | jq -r '.updatedMatches // 0')
+              accuracy_updates=$(echo "$body" | jq -r '.accuracyUpdates // 0')
+              total_checked=$(echo "$body" | jq -r '.totalChecked // 0')
+              
+              echo "📈 Results:"
+              echo "  • Matches checked: $total_checked"
+              echo "  • Scores updated: $updated_matches" 
+              echo "  • Accuracy calculations: $accuracy_updates"
+            fi
+          else
+            echo "❌ Score update failed with code $http_code"
+            exit 1
+          fi
+
+      - name: 📈 Log Results
+        if: always()
+        run: |
+          echo "🕐 Score update completed at $(date)"
+          echo "⏰ Next accuracy check in 1 hour"
