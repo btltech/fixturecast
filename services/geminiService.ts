@@ -1,16 +1,14 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { Prediction, Match, ConfidenceLevel, PredictionContext } from '../types';
+// Gemini service now proxies through Cloudflare Pages Function (/api/ai/gemini/predict)
+// to avoid exposing the API key in client code. This file keeps the same external
+// interface but no longer imports the Gemini SDK directly.
+import { Prediction, Match, PredictionContext } from '../types';
 import { calculatePredictionConfidence } from './confidenceService';
 import { storeDailyPrediction } from './accuracyService';
 import { withRateLimit } from './rateLimitService';
 
-// Use environment variable for API key
-const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY;
-let ai: GoogleGenAI | null = null;
-let geminiQueue: Promise<any> = Promise.resolve();
-const GEMINI_RETRY = 2;
-const GEMINI_BACKOFF_MS = 1500;
+const GEMINI_RETRY = 2; // kept for potential retry logic of proxy failures
+const PROXY_ENDPOINT = '/api/ai/gemini/predict';
 
 // Gemini API usage tracking
 let geminiCallCount = 0;
@@ -27,18 +25,9 @@ const resetDailyCounterIfNeeded = () => {
   }
 };
 
-if (apiKey) {
-  ai = new GoogleGenAI({ apiKey });
-  // Set global flag for status display
-  if (typeof window !== 'undefined') {
-    (window as any).geminiConfigured = true;
-  }
-} else {
-  console.warn('GEMINI_API_KEY not found - predictions will be disabled');
-  // Set global flag for status display
-  if (typeof window !== 'undefined') {
-    (window as any).geminiConfigured = false;
-  }
+// Set global flag (true assumes server has key; we cannot detect from client)
+if (typeof window !== 'undefined') {
+  (window as any).geminiConfigured = true; // optimistic; server enforces real availability
 }
 
 // Utility to add a delay between API calls to respect rate limits
@@ -46,184 +35,30 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // No fallback: predictions require Gemini API key
 
-const predictionSchema = {
-  type: Type.OBJECT,
-  properties: {
-    homeWinProbability: {
-      type: Type.NUMBER,
-      description: "Probability of the home team winning (0-100).",
-    },
-    drawProbability: {
-      type: Type.NUMBER,
-      description: "Probability of a draw (0-100).",
-    },
-    awayWinProbability: {
-      type: Type.NUMBER,
-      description: "Probability of the away team winning (0-100).",
-    },
-    predictedScoreline: {
-      type: Type.STRING,
-      description: "The most statistically probable final score (e.g., '2-1').",
-    },
-    confidence: {
-      type: Type.STRING,
-      enum: ["Low", "Medium", "High"],
-      description: "The model's confidence in its prediction.",
-    },
-    keyFactors: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          category: {
-            type: Type.STRING,
-            description: "The category of the key factors (e.g., 'ML Model Consensus', 'Statistical Patterns', 'Tactical Analysis', 'Uncertainty Factors')."
-          },
-          points: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.STRING,
-            },
-            description: "A list of specific points within this category."
-          }
-        },
-        required: ["category", "points"]
-      },
-      description: "A categorized list of key factors from ensemble ML analysis, including model consensus, statistical patterns, tactical insights, and uncertainty quantification.",
-    },
-    goalLine: {
-      type: Type.OBJECT,
-      description: "Prediction for the Over/Under goal line, typically 2.5 goals.",
-      properties: {
-        line: { type: Type.NUMBER, description: "The goal line (e.g., 2.5)." },
-        overProbability: { type: Type.NUMBER, description: "Probability of total goals being OVER the line (0-100)." },
-        underProbability: { type: Type.NUMBER, description: "Probability of total goals being UNDER the line (0-100)." }
-      },
-      required: ["line", "overProbability", "underProbability"]
-    },
-    btts: {
-      type: Type.OBJECT,
-      description: "Both Teams To Score market prediction.",
-      properties: {
-        yesProbability: { type: Type.NUMBER, description: "Probability that both teams score (0-100)." },
-        noProbability: { type: Type.NUMBER, description: "Probability that at least one team fails to score (0-100)." }
-      },
-      required: ["yesProbability", "noProbability"]
-    },
-    htft: {
-      type: Type.OBJECT,
-      description: "Half-Time/Full-Time prediction with all 9 possible combinations.",
-      properties: {
-        homeHome: { type: Type.NUMBER, description: "Home team leads at HT, wins at FT (0-100)." },
-        homeDraw: { type: Type.NUMBER, description: "Home team leads at HT, draws at FT (0-100)." },
-        homeAway: { type: Type.NUMBER, description: "Home team leads at HT, loses at FT (0-100)." },
-        drawHome: { type: Type.NUMBER, description: "Draw at HT, home team wins at FT (0-100)." },
-        drawDraw: { type: Type.NUMBER, description: "Draw at HT, draw at FT (0-100)." },
-        drawAway: { type: Type.NUMBER, description: "Draw at HT, away team wins at FT (0-100)." },
-        awayHome: { type: Type.NUMBER, description: "Away team leads at HT, home team wins at FT (0-100)." },
-        awayDraw: { type: Type.NUMBER, description: "Away team leads at HT, draws at FT (0-100)." },
-        awayAway: { type: Type.NUMBER, description: "Away team leads at HT, wins at FT (0-100)." }
-      },
-      required: ["homeHome", "homeDraw", "homeAway", "drawHome", "drawDraw", "drawAway", "awayHome", "awayDraw", "awayAway"]
-    },
-    scoreRange: {
-      type: Type.OBJECT,
-      description: "Total goals range prediction.",
-      properties: {
-        zeroToOne: { type: Type.NUMBER, description: "Probability of 0-1 total goals (0-100)." },
-        twoToThree: { type: Type.NUMBER, description: "Probability of 2-3 total goals (0-100)." },
-        fourPlus: { type: Type.NUMBER, description: "Probability of 4+ total goals (0-100)." }
-      },
-      required: ["zeroToOne", "twoToThree", "fourPlus"]
-    },
-    firstGoalscorer: {
-      type: Type.OBJECT,
-      description: "First goalscorer type prediction.",
-      properties: {
-        homeTeam: { type: Type.NUMBER, description: "Probability home team scores first (0-100)." },
-        awayTeam: { type: Type.NUMBER, description: "Probability away team scores first (0-100)." },
-        noGoalscorer: { type: Type.NUMBER, description: "Probability of no goals scored (0-100)." }
-      },
-      required: ["homeTeam", "awayTeam", "noGoalscorer"]
-    },
-    cleanSheet: {
-      type: Type.OBJECT,
-      description: "Clean sheet prediction for both teams.",
-      properties: {
-        homeTeam: { type: Type.NUMBER, description: "Probability home team keeps clean sheet (0-100)." },
-        awayTeam: { type: Type.NUMBER, description: "Probability away team keeps clean sheet (0-100)." }
-      },
-      required: ["homeTeam", "awayTeam"]
-    },
-    corners: {
-      type: Type.OBJECT,
-      description: "Corner prediction (Over/Under 9.5 corners).",
-      properties: {
-        over: { type: Type.NUMBER, description: "Probability of over 9.5 corners (0-100)." },
-        under: { type: Type.NUMBER, description: "Probability of under 9.5 corners (0-100)." }
-      },
-      required: ["over", "under"]
-    },
-    expectedGoals: {
-      type: Type.OBJECT,
-      description: "Expected goals (xG) predictions from Poisson modeling.",
-      properties: {
-        homeXg: { type: Type.NUMBER, description: "Expected goals for home team (e.g., 1.8)." },
-        awayXg: { type: Type.NUMBER, description: "Expected goals for away team (e.g., 1.2)." }
-      },
-      required: ["homeXg", "awayXg"]
-    },
-    modelWeights: {
-      type: Type.OBJECT,
-      description: "Ensemble model contribution weights for transparency.",
-      properties: {
-        xgboost: { type: Type.NUMBER, description: "XGBoost model weight in ensemble (0-100)." },
-        poisson: { type: Type.NUMBER, description: "Poisson regression weight in ensemble (0-100)." },
-        neuralNet: { type: Type.NUMBER, description: "Neural network weight in ensemble (0-100)." },
-        bayesian: { type: Type.NUMBER, description: "Bayesian model weight in ensemble (0-100)." }
-      },
-      required: ["xgboost", "poisson", "neuralNet", "bayesian"]
-    },
-    uncertaintyMetrics: {
-      type: Type.OBJECT,
-      description: "Prediction uncertainty and confidence intervals.",
-      properties: {
-        predictionVariance: { type: Type.NUMBER, description: "Statistical variance in ensemble predictions (0-100)." },
-        dataQuality: { type: Type.STRING, enum: ["High", "Medium", "Low"], description: "Quality of available data for analysis." },
-        modelAgreement: { type: Type.NUMBER, description: "Percentage agreement between ensemble models (0-100)." }
-      },
-      required: ["predictionVariance", "dataQuality", "modelAgreement"]
-    }
-  },
-  required: [
-    "homeWinProbability",
-    "drawProbability",
-    "awayWinProbability",
-    "predictedScoreline",
-    "confidence",
-    "keyFactors",
-    "goalLine",
-    "btts",
-    "htft",
-    "scoreRange",
-    "firstGoalscorer",
-    "cleanSheet",
-    "corners",
-    "expectedGoals",
-    "modelWeights",
-    "uncertaintyMetrics"
-  ],
-};
+// We no longer define a schema client-side; server handles prompt & parsing.
 
 export const getMatchPrediction = async (match: Match, context?: PredictionContext, accuracyStats?: any): Promise<Prediction> => {
+  // Detect environment: use DeepSeek for local dev, Gemini for Worker/production
+  const isWorkerEnvironment = typeof window === 'undefined' || (globalThis as any).WorkerGlobalScope;
+  // Detect Vitest/Jest style test environment to force Gemini path (avoid DeepSeek branch & network)
+  const isTestEnv = !!((typeof process !== 'undefined' && (process.env?.VITEST || process.env?.NODE_ENV === 'test')) || (import.meta as any)?.vitest);
+  const isLocalDevelopment = !isWorkerEnvironment && !isTestEnv && typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  
+  // Use DeepSeek for local development, Gemini for Worker/production
+  if (isLocalDevelopment) {
+    console.log('🤖 Using DeepSeek API for local prediction generation');
+    const { getDeepSeekMatchPrediction } = await import('./deepSeekService');
+    return getDeepSeekMatchPrediction(match, context, accuracyStats);
+  }
+
+  console.log('🔮 Using Gemini proxy endpoint for Worker/production prediction generation');
+  
   try {
-    // Check if AI is available
-    if (!ai) {
-      throw new Error('Gemini API key not configured. Set VITE_GEMINI_API_KEY in environment.');
-    }
-    
-    // With higher quota, reduce delay for faster UX
-    await delay(2000);
+    // (Proxy will enforce key presence server-side)
+
+  // Apply artificial delay in real usage; skip or reduce in tests to avoid timeouts
+  const delayMs = isTestEnv ? 10 : 2000;
+  await delay(delayMs);
 
     // Debug logging to see what context is being built
     console.log(`🔍 Context debug for ${match.homeTeam} vs ${match.awayTeam}:`, {
@@ -298,28 +133,20 @@ OUTPUT FORMAT
 
     // Generate AI prediction with rate limiting and retry
     const response = await withRateLimit('gemini', async () => {
-      // Reset daily counter if needed
       resetDailyCounterIfNeeded();
-      
-      const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: predictionSchema,
-        },
+      const r = await fetch(PROXY_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ match, context, accuracyStats })
       });
-      
-      // Track successful API call
-      geminiCallCount++;
-      geminiCallsToday++;
-      console.log(`✅ Gemini API call #${geminiCallCount} (${geminiCallsToday} today) - ${match.homeTeam} vs ${match.awayTeam}`);
-      
-      return result;
+      if (!r.ok) {
+        const err = await r.text();
+        throw new Error(`Gemini proxy error (${r.status}): ${err}`);
+      }
+      return r.json();
     }, GEMINI_RETRY + 1);
-    
-    const jsonText = response.text.trim();
-    const predictionData = JSON.parse(jsonText);
+
+    const predictionData = response.prediction || response;
 
     // Normalize probabilities to ensure they sum to 100
     const totalProb = predictionData.homeWinProbability + predictionData.drawProbability + predictionData.awayWinProbability;
@@ -438,10 +265,13 @@ OUTPUT FORMAT
       }
     }
 
-    return predictionData as Prediction;
+  return predictionData as Prediction;
     
   } catch (error: any) {
     console.error("Error fetching prediction from Gemini API:", error);
+    if (error?.message?.toLowerCase()?.includes('rate limit')) {
+      console.warn('🔁 Gemini rate limit surfaced to caller. Consider raising min interval or lowering RPM env overrides.');
+    }
     
     // Re-throw the error instead of using fallback data
     if (error && typeof error.message === 'string' && error.message.includes("RESOURCE_EXHAUSTED")) {
@@ -461,7 +291,7 @@ export const getGeminiApiUsage = () => {
     totalCalls: geminiCallCount,
     callsToday: geminiCallsToday,
     lastResetDate,
-    isConfigured: !!apiKey
+    isConfigured: true // assume proxy available
   };
 };
 

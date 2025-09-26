@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Predictions Loading</title>
+</head>
+<body>
+    <h1>Predictions Loading Test</h1>
+    <div id="results"></div>
+    <div id="error" style="color: red;"></div>
+
+    <script>
+        async function testPredictionsLoading() {
+            const results = document.getElementById('results');
+            const errorDiv = document.getElementById('error');
+            
+            try {
+                results.innerHTML = '<p>Loading predictions...</p>';
+                
+                // Test loading predictions file
+                const response = await fetch('./predictions-data.json');
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Predictions data:', data);
+                
+                results.innerHTML = `
+                    <h2>✅ Predictions loaded successfully!</h2>
+                    <p><strong>Count:</strong> ${data.count || 0}</p>
+                    <p><strong>Last Updated:</strong> ${data.lastUpdated || 'Unknown'}</p>
+                    <p><strong>Date:</strong> ${data.date || 'Unknown'}</p>
+                    <h3>Predictions:</h3>
+                    <ul>
+                        ${data.predictions ? data.predictions.map(pred => 
+                            `<li>
+                                <strong>${pred.homeTeam} vs ${pred.awayTeam}</strong><br>
+                                League: ${pred.league}<br>
+                                Prediction: ${pred.prediction?.outcome} (${pred.prediction?.confidence}% confidence)<br>
+                                Score: ${pred.prediction?.predictedScore}<br>
+                                Match ID: ${pred.matchId}
+                            </li>`
+                        ).join('') : 'No predictions found'}
+                    </ul>
+                `;
+                
+            } catch (error) {
+                console.error('Error loading predictions:', error);
+                errorDiv.innerHTML = `<p>❌ Error loading predictions: ${error.message}</p>`;
+            }
+        }
+
+        // Run the test when page loads
+        testPredictionsLoading();
+    </script>
+</body>
+</html>
+</script>
+</body>
+</html>

@@ -206,7 +206,8 @@ export class UnifiedPredictionService {
    * Check which models are available
    */
   getAvailableModels(): { gemini: boolean; deepseek: boolean } {
-    const geminiAvailable = !!(import.meta as any).env?.VITE_GEMINI_API_KEY;
+    // Gemini now always proxied via server; assume available (server will error if misconfigured)
+    const geminiAvailable = true;
     const deepseekAvailable = !!(import.meta as any).env?.VITE_DEEPSEEK_API_KEY;
     
     return {

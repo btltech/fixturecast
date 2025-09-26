@@ -1,87 +1,112 @@
 [
   {
-    "id": "pred_1758889864543_1",
-    "matchId": 1001,
-    "homeTeam": "Arsenal",
-    "awayTeam": "Liverpool",
-    "league": "Premier League",
-    "matchDate": "2025-09-26T12:31:04.543Z",
+    "id": "pred_today_1758892092578_1339182",
+    "matchId": 1339182,
+    "homeTeam": "Colo Colo",
+    "awayTeam": "Deportes Iquique",
+    "league": "Primera División Chile",
+    "matchDate": "2025-09-26T22:00:00+00:00",
+    "venue": "Estadio Monumental David Arellano",
     "prediction": {
-      "outcome": "Draw",
+      "analysis": "Please note: As an AI, I do not have the ability to predict future events, including specific football match outcomes over a year in advance. The information regarding team form, player injuries, tactical developments, league standings, and coaching changes for September 26, 2025, is currently unknown and impossible to ascertain.\n\nTherefore, the following analysis is **purely hypothetical and based on the historical context and general standing of these teams in the Primera División Chile, assuming their relative strengths and typical performance patterns remain consistent until that date.** This is NOT a prediction based on current or future real-world data.\n\n---\n\n**Hypothetical Analysis: Colo Colo vs Deportes Iquique (September 26, 2025)**\n\n**1. Match Outcome:**\n*   **Home Win (Colo Colo)**\n\n**Reasoning:**\nHistorically, Colo Colo is one of the biggest and most successful clubs in Chile, boasting a formidable home record at the Estadio Monumental David Arellano. They typically challenge for the league title. Deportes Iquique, while capable of causing upsets, often fluctuates between mid-table and lower-table positions and generally struggles against the league's giants, especially away from home. The home advantage for Colo Colo is a significant factor, with their passionate fanbase creating an intimidating atmosphere.\n\n**2. Confidence Percentage (Hypothetical):**\n*   **75%**\n\n**Reasoning:**\nThis confidence level reflects the strong historical probability of Colo Colo winning at home against a team like Deportes Iquique. However, it's not 100% because any match can have unexpected turns, red cards, individual errors, or moments of brilliance from the underdog.\n\n**3. Predicted Score (Hypothetical):**\n*   **Colo Colo 2 - 0 Deportes Iquique**\n\n**Reasoning:**\nThis scoreline suggests a comfortable but not overwhelming victory for Colo Colo. They are expected to dominate possession and create more chances. Deportes Iquique would likely adopt a more defensive approach,",
+      "outcome": "Home Win",
+      "confidence": 94,
+      "predictedScore": "2-1",
+      "btts": "No",
+      "overUnder": "Under 2.5",
+      "model": "gemini-2.5-flash",
+      "generatedAt": "2025-09-26T13:08:12.578Z"
+    },
+    "timestamp": "2025-09-26T13:08:12.578Z",
+    "automated": false,
+    "source": "todays-real-matches"
+  },
+  {
+    "id": "pred_today_1758892100636_1374199",
+    "matchId": 1374199,
+    "homeTeam": "Banfield",
+    "awayTeam": "Union Santa Fe",
+    "league": "Liga Profesional Argentina",
+    "matchDate": "2025-09-26T22:00:00+00:00",
+    "venue": "Estadio Florencio Solá",
+    "prediction": {
+      "analysis": "I understand you're looking for a detailed prediction for the match between Banfield and Union Santa Fe on September 26, 2025.\n\nHowever, as an AI, I do not have the ability to predict future events, especially football matches almost a year and a half in advance. The outcome of a football match depends on a multitude of factors that are constantly changing, including:\n\n*   **Team Form:** Current performance, recent results, and momentum.\n*   **Player Availability:** Injuries, suspensions, and international call-ups.\n*   **Tactical Approaches:** Managerial strategies, formations, and player roles.\n*   **League Standings & Motivation:** How important the points are for each team (e.g., title race, relegation battle, continental qualification).\n*   **Head-to-Head Records:** While historical, recent H2H can be relevant, but a year and a half is a long time.\n*   **Transfer Window Activity:** New signings and departures can drastically alter a team's strength.\n*   **Managerial Changes:** A new coach can bring a completely different philosophy.\n*   **Weather Conditions:** Can sometimes play a minor role.\n\nWithout any of this crucial, real-time information for September 2025, any prediction I could make would be pure speculation and completely baseless.\n\nTherefore, I cannot provide a meaningful or accurate analysis for this future match. I recommend checking for predictions closer to the actual match date when current team news and form are available.",
+      "outcome": "Home Win",
       "confidence": 72,
-      "analysis": "Both teams are in excellent form. Arsenal at home advantage but Liverpool's attacking prowess makes this a tight contest. Expect a 2-2 draw with both teams to score.",
-      "model": "enhanced-analysis",
-      "generatedAt": "2025-09-26T12:31:04.544Z"
+      "predictedScore": "2-1",
+      "btts": "Yes",
+      "overUnder": "Under 2.5",
+      "model": "gemini-2.5-flash",
+      "generatedAt": "2025-09-26T13:08:20.635Z"
     },
-    "timestamp": "2025-09-26T12:31:04.544Z",
-    "automated": true
+    "timestamp": "2025-09-26T13:08:20.636Z",
+    "automated": false,
+    "source": "todays-real-matches"
   },
   {
-    "id": "pred_1758889864544_2",
-    "matchId": 1002,
-    "homeTeam": "Manchester City",
-    "awayTeam": "Chelsea",
-    "league": "Premier League",
-    "matchDate": "2025-09-26T12:31:04.544Z",
+    "id": "pred_today_1758892115698_1392466",
+    "matchId": 1392466,
+    "homeTeam": "Once Caldas",
+    "awayTeam": "Chico",
+    "league": "Primera A Colombia",
+    "matchDate": "2025-09-26T23:00:00+00:00",
+    "venue": "Estadio Palogrande",
     "prediction": {
+      "analysis": "This analysis is highly **hypothetical** as the match date is over a year in the future. Real-time factors like current form, injuries, transfers, managerial changes, and league standings will significantly impact the actual outcome. However, based on historical trends, general team characteristics, and typical Primera A dynamics, here's a detailed prediction:\n\n---\n\n**Match Analysis: Once Caldas vs Chico**\n**League:** Primera A Colombia\n**Venue:** Estadio Palogrande\n**Date:** 2025-09-26T23:00:00+00:00\n\n---\n\n### 1. Match Outcome:\n**Home Win (Once Caldas)**\n\n**Reasoning:**\nOnce Caldas historically benefits significantly from playing at home in Estadio Palogrande. They tend",
       "outcome": "Home Win",
-      "confidence": 78,
-      "analysis": "Manchester City's home dominance is clear. Chelsea struggling with consistency. Expect City to control the game and win 3-1. Over 2.5 goals likely.",
-      "model": "enhanced-analysis",
-      "generatedAt": "2025-09-26T12:31:04.544Z"
-    },
-    "timestamp": "2025-09-26T12:31:04.544Z",
-    "automated": true
-  },
-  {
-    "id": "pred_1758889864544_3",
-    "matchId": 1003,
-    "homeTeam": "Bayern Munich",
-    "awayTeam": "Borussia Dortmund",
-    "league": "Bundesliga",
-    "matchDate": "2025-09-26T12:31:04.544Z",
-    "prediction": {
-      "outcome": "Home Win",
-      "confidence": 85,
-      "analysis": "Der Klassiker favors Bayern at home. Their superior squad depth and home record makes them strong favorites. Expecting a 2-0 or 3-1 victory for Bayern.",
-      "model": "enhanced-analysis",
-      "generatedAt": "2025-09-26T12:31:04.544Z"
-    },
-    "timestamp": "2025-09-26T12:31:04.544Z",
-    "automated": true
-  },
-  {
-    "id": "pred_1758889864544_4",
-    "matchId": 1004,
-    "homeTeam": "Real Madrid",
-    "awayTeam": "Barcelona",
-    "league": "La Liga",
-    "matchDate": "2025-09-26T12:31:04.544Z",
-    "prediction": {
-      "outcome": "Away Win",
-      "confidence": 68,
-      "analysis": "El Clasico at the Bernabeu. Barcelona showing improved form under new tactics. Real Madrid missing key players. This could be Barcelona's chance - 1-2 away win.",
-      "model": "enhanced-analysis",
-      "generatedAt": "2025-09-26T12:31:04.544Z"
-    },
-    "timestamp": "2025-09-26T12:31:04.544Z",
-    "automated": true
-  },
-  {
-    "id": "pred_1758889864544_5",
-    "matchId": 1005,
-    "homeTeam": "Juventus",
-    "awayTeam": "AC Milan",
-    "league": "Serie A",
-    "matchDate": "2025-09-26T12:31:04.544Z",
-    "prediction": {
-      "outcome": "Draw",
       "confidence": 65,
-      "analysis": "Two Italian giants in rebuilding phases. Both teams evenly matched with similar tactical approaches. Expect a cagey 1-1 draw with limited goal opportunities.",
-      "model": "enhanced-analysis",
-      "generatedAt": "2025-09-26T12:31:04.544Z"
+      "predictedScore": "2-1",
+      "btts": "Yes",
+      "overUnder": "Under 2.5",
+      "model": "gemini-2.5-flash",
+      "generatedAt": "2025-09-26T13:08:35.698Z"
     },
-    "timestamp": "2025-09-26T12:31:04.544Z",
-    "automated": true
+    "timestamp": "2025-09-26T13:08:35.698Z",
+    "automated": false,
+    "source": "todays-real-matches"
+  },
+  {
+    "id": "pred_today_1758892127972_1327264",
+    "matchId": 1327264,
+    "homeTeam": "North Carolina",
+    "awayTeam": "Miami FC",
+    "league": "USL Championship",
+    "matchDate": "2025-09-26T23:00:00+00:00",
+    "venue": "First Horizon Stadium at WakeMed Soccer Park",
+    "prediction": {
+      "analysis": "I appreciate you're looking for a detailed analysis of a USL Championship match. However, there's a critical issue with your request:\n\n**The match you've specified, \"North Carolina vs Miami FC\" on September 26, 2025, is over a year away.**\n\nAs an AI, I can analyze current or very near-future matches based on available data (recent form, squad news, injuries, tactical trends, historical head-to-head, etc.). However, predicting a football match over 15 months in advance is impossible and purely speculative for the following reasons:\n\n1.  **Player Rosters & Transfers:** Both North Carolina FC and Miami FC will undergo significant squad changes between now and September 2025. Key players might leave, new players will be signed, and academy prospects might emerge. Injuries, suspensions, and international call-ups are also unpredictable so far out.\n2.  **Managerial Changes:** Coaching staff can change, leading to entirely different tactical approaches and team philosophies.\n3.  **Team Form & League Standings:** Current form is irrelevant. Teams' performance fluctuates wildly season to season, and even within a single season. We have no idea what their league positions, motivations, or momentum will be in late September 2025.\n4.  **Tactical Evolution:** Teams evolve their strategies based on personnel, opponents, and coaching decisions. What might be a key tactical factor today will likely be obsolete by then.\n5.  **Injuries & Suspensions:** It's impossible to predict which key players might be injured or suspended on that specific date.\n\nTherefore, I cannot provide a meaningful or accurate prediction for this match. Any analysis I generate would be entirely fabricated and misleading.\n\nIf you have a match happening in the *present day or very near future* for which you'd like an analysis, please provide those details, and I'd be happy to help!",
+      "outcome": "Home Win",
+      "confidence": 87,
+      "predictedScore": "2-1",
+      "btts": "Yes",
+      "overUnder": "Under 2.5",
+      "model": "gemini-2.5-flash",
+      "generatedAt": "2025-09-26T13:08:47.971Z"
+    },
+    "timestamp": "2025-09-26T13:08:47.972Z",
+    "automated": false,
+    "source": "todays-real-matches"
+  },
+  {
+    "id": "pred_today_1758892143396_1470059",
+    "matchId": 1470059,
+    "homeTeam": "Wanderers",
+    "awayTeam": "Cerro",
+    "league": "Primera División Uruguay",
+    "matchDate": "2025-09-26T23:00:00+00:00",
+    "venue": "Parque Alfredo Víctor Viera",
+    "prediction": {
+      "analysis": "I cannot provide a detailed prediction for a \"REAL football match happening TODAY\" (September 26, 2025) because today's date is June 11, 2024.\n\nFootball fixtures, especially specific dates and times for league matches, are typically not set over a year in advance. They are usually released a few months before the season starts, and specific match days/times are often finalized closer to the game, subject to broadcasting schedules, cup competitions, and other factors.\n\nFurthermore, any prediction for a match so far in the future would be pure speculation and entirely inaccurate, as:\n*   **Team Rosters:** Players will change significantly (transfers, retirements, youth promotions).\n*   **Managerial Changes:** Coaches come and go.\n*   **Team Form & Tactics:** Current form, tactical approaches, and league standings will be completely different.\n*   **Injuries & Suspensions:** Impossible to predict.\n\n**Therefore, I cannot fulfill your request for a \"real\" prediction for this match.**\n\n---\n\n**However, I can demonstrate how I *would* analyze such a match if it were a current or near-future fixture, using hypothetical data points and general knowledge about the Primera División Uruguay.**\n\nLet's imagine, for the sake of demonstrating the analysis structure, that this match was happening next week and I had access to current, relevant data.\n\n---\n\n**Hypothetical Analysis (Based on current season trends and general knowledge, NOT predictive for 2025):**\n\n**Match:** Wanderers vs Cerro\n**League:** Primera División Uruguay\n**Venue:** Parque Alfredo Víctor Viera\n**Date:** (Hypothetically, if it were happening soon)\n\n**1. Match Outcome: Home Win (Wanderers)**\n\n*   **Reasoning (Hypothetical):** Wanderers generally have a strong home advantage at Parque Viera. They are often a mid-to-upper-table team, while Cerro frequently battles in the lower half. If Wanderers are in decent form and Cerro are struggling away from home (a common trend for many Uruguayan teams), the home side would be favored. Their compact stadium and familiar surroundings would likely give them an edge.\n\n**2. Confidence Percentage: 65%**\n\n*   **Reasoning (Hypothetical):",
+      "outcome": "Home Win",
+      "confidence": 92,
+      "predictedScore": "2-1",
+      "btts": "Yes",
+      "overUnder": "Over 2.5",
+      "model": "gemini-2.5-flash",
+      "generatedAt": "2025-09-26T13:09:03.395Z"
+    },
+    "timestamp": "2025-09-26T13:09:03.396Z",
+    "automated": false,
+    "source": "todays-real-matches"
   }
 ]

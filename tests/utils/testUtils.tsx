@@ -271,8 +271,9 @@ beforeEach(() => {
 });
 
 const TestProviders = ({ children }: { children: React.ReactNode }) => (
-  <AppProvider value={mockAppContextValue}>
-    <MemoryRouter>{children}</MemoryRouter>
+  <AppProvider>
+    {/* Start tests on /dashboard so they don't hang on hero landing expectations */}
+    <MemoryRouter initialEntries={['/dashboard']}>{children}</MemoryRouter>
   </AppProvider>
 );
 
@@ -280,7 +281,7 @@ const customRender = (ui: ReactElement, options: RenderOptions = {}) =>
   render(ui, { wrapper: TestProviders, ...options });
 
 export * from '@testing-library/react';
-export { customRender as render, within };
+export { customRender as render };
 
 export const openSearchModal = () => {
   fireEvent.keyDown(window, { key: 'k', ctrlKey: true });

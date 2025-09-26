@@ -45,6 +45,13 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
 
           {/* Desktop Action Buttons */}
           <div className="hidden md:flex items-center space-x-3">
+            {/* AI API Status Indicator */}
+            <div className="flex items-center space-x-1 px-2 py-1 bg-gray-700/50 rounded-md text-xs">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-gray-300">
+                {typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'DeepSeek' : 'Gemini'}
+              </span>
+            </div>
             <button
               onClick={() => refreshRealTimeData()}
               className="p-2 text-gray-300 hover:text-white transition-colors duration-200"

@@ -123,8 +123,8 @@ Let users choose their preferred model:
 ## 🛠️ **Current Configuration**
 
 Your API keys are configured:
-- ✅ Gemini: `VITE_GEMINI_API_KEY`
-- ✅ DeepSeek: `VITE_DEEPSEEK_API_KEY`
+- ✅ Gemini (server secret): `GEMINI_API_KEY` (used only via /api/ai/gemini/predict)
+- ✅ DeepSeek (client/dev): `VITE_DEEPSEEK_API_KEY`
 
 Both models are ready to use in your local development environment!
 

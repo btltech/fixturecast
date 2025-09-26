@@ -27,8 +27,9 @@
 
 **Solution:**
 ```bash
-# Check your .env file:
-VITE_GEMINI_API_KEY=your_actual_gemini_key
+# Check your configuration:
+# Gemini now server-side: set as Cloudflare secret GEMINI_API_KEY
+GEMINI_API_KEY=your_actual_gemini_key   # (Cloudflare secret, not in client .env)
 VITE_DEEPSEEK_API_KEY=your_actual_deepseek_key
 ```
 
@@ -115,7 +116,7 @@ npm run dev
 ### **Check Environment:**
 ```bash
 # In terminal:
-echo $VITE_GEMINI_API_KEY
+echo $GEMINI_API_KEY   # only if running a secure server shell (not in browser)
 echo $VITE_DEEPSEEK_API_KEY
 ```
 

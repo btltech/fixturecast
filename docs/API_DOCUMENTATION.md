@@ -23,8 +23,8 @@ The application uses multiple API keys for different services:
 
 ```typescript
 interface APIKeys {
-  VITE_GEMINI_API_KEY: string;      // Google Gemini AI
-  VITE_FOOTBALL_API_KEY: string;    // API-Sports.io
+  GEMINI_API_KEY: string;           // (Server secret only) Google Gemini AI used by /api/ai/gemini/predict
+  VITE_FOOTBALL_API_KEY: string;    // API-Sports.io (client proxy usage)
   VITE_PREDICTION_API_KEY: string;  // Cloud prediction storage
   VITE_SEARCH_CONSOLE_API_KEY?: string; // Google Search Console
   VITE_PAGESPEED_API_KEY?: string;  // PageSpeed Insights
@@ -34,8 +34,8 @@ interface APIKeys {
 ### Environment Configuration
 
 ```bash
-# Production
-VITE_GEMINI_API_KEY=your_gemini_api_key
+# Production (Gemini now server-side only)
+GEMINI_API_KEY=your_gemini_api_key   # Cloudflare Pages/Worker secret
 VITE_FOOTBALL_API_KEY=your_football_api_key
 VITE_PREDICTION_API_KEY=your_prediction_api_key
 

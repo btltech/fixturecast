@@ -14,7 +14,6 @@ vi.mock('../../services/newsService');
 setMockAppContextValue({
   fixtures: [mockMatch],
   teams: mockTeams,
-  predictions: { [mockMatch.id]: mockPrediction },
 });
 
 vi.mock('../../components/EnhancedNavigation', () => {
@@ -107,24 +106,25 @@ vi.mock('../../services/calendarService', () => ({
 describe('User Flow Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setMockAppContextValue({
-      fixtures: [mockMatch],
-      teams: mockTeams,
-      predictions: { [mockMatch.id]: mockPrediction },
-      generatePrediction: vi.fn().mockResolvedValue(mockPrediction),
-      clearError: vi.fn(),
-      isLoading: false,
-      fixtureError: null,
-    });
+      setMockAppContextValue({
+        fixtures: [mockMatch],
+        teams: mockTeams,
+        generatePrediction: vi.fn().mockResolvedValue(mockPrediction),
+        clearError: vi.fn(),
+        isLoading: false,
+        fixtureError: null,
+      });
   });
 
   it('loads dashboard and navigates to match detail', async () => {
     render(<App />);
 
+    // Click first match card (could be Match of the Day wrapper or standard card)
     const matchCards = await screen.findAllByTestId('match-card');
     fireEvent.click(matchCards[0]);
 
-    expect(await screen.findByText('Premier League')).toBeInTheDocument();
+    // Instead of ambiguous league text (multiple occurrences), assert team heading appears in detail view
+    expect(await screen.findByText(/Manchester United/i)).toBeInTheDocument();
   });
 
   it('navigates between different views', async () => {
@@ -166,9 +166,10 @@ describe('User Flow Integration Tests', () => {
 
     expect(await screen.findByText('2-1')).toBeInTheDocument();
 
-    const predictionButton = await screen.findByTestId('prediction-view-details');
-    fireEvent.click(predictionButton);
-
+    // When on dashboard only summary is present; open full prediction by clicking scoreline (or card)
+    const scorelineEl = await screen.findByText('2-1');
+    fireEvent.click(scorelineEl);
+    // Expect navigation to prediction detail (confidence text)
     expect(await screen.findByText(/Prediction Confidence/i)).toBeInTheDocument();
   });
 

@@ -138,8 +138,8 @@ functions/api/
 
 #### Required Environment Variables:
 ```bash
-# Core APIs
-VITE_GEMINI_API_KEY=your_gemini_api_key
+# Core APIs (client no longer needs Gemini key; use server secret via Pages/Worker)
+GEMINI_API_KEY=your_gemini_api_key   # Stored as Cloudflare secret, accessed by /api/ai/gemini/predict
 VITE_FOOTBALL_API_KEY=your_football_api_key
 VITE_PREDICTION_API_KEY=your_prediction_api_key
 

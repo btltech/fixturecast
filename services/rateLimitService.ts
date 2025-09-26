@@ -19,16 +19,23 @@ interface RateLimitConfig {
   maxBackoffMs: number;
 }
 
+// Allow environment overrides so we can tune limits for the actual subscription tier
+const toNum = (v: any, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
 const DEFAULT_CONFIGS = {
   gemini: {
-    maxRequestsPerMinute: 15,    // Gemini typically allows 15/min
-    maxRequestsPerDay: 1500,     // Conservative daily limit
-    baseBackoffMs: 1000,
-    maxBackoffMs: 60000
+    // Free & lower paid tiers are often far lower than 15 RPM; make conservative & override via env
+    maxRequestsPerMinute: toNum((import.meta as any)?.env?.VITE_GEMINI_RPM, 4),
+    maxRequestsPerDay: toNum((import.meta as any)?.env?.VITE_GEMINI_DAILY, 500),
+    baseBackoffMs: 1500,
+    maxBackoffMs: 90000
   },
   deepseek: {
-    maxRequestsPerMinute: 10,    // DeepSeek is more restrictive
-    maxRequestsPerDay: 1000,     // Conservative daily limit
+    maxRequestsPerMinute: toNum((import.meta as any)?.env?.VITE_DEEPSEEK_RPM, 8),
+    maxRequestsPerDay: toNum((import.meta as any)?.env?.VITE_DEEPSEEK_DAILY, 800),
     baseBackoffMs: 2000,
     maxBackoffMs: 120000
   }
@@ -37,12 +44,25 @@ const DEFAULT_CONFIGS = {
 class RateLimitManager {
   private states: Map<string, RateLimitState> = new Map();
   private configs: Map<string, RateLimitConfig> = new Map();
+  // Simple per-service promise chain to serialize calls (prevents burst 429)
+  private queues: Map<string, Promise<any>> = new Map();
+  // Enforce a minimum interval between calls (ms) per service (overrideable by env)
+  private minIntervalMs: Map<string, number> = new Map();
+  private lastCallAt: Map<string, number> = new Map();
 
   constructor() {
     // Initialize default configurations
     Object.entries(DEFAULT_CONFIGS).forEach(([service, config]) => {
       this.configs.set(service, config);
       this.resetState(service);
+      // Default min interval: spread RPM evenly + buffer (e.g. RPM 4 => 15s spacing)
+      const rpm = config.maxRequestsPerMinute;
+      const baseInterval = rpm > 0 ? Math.ceil(60000 / rpm) : 15000;
+      const envKey = `VITE_${service.toUpperCase()}_MIN_INTERVAL_MS`;
+      const envVal = (import.meta as any)?.env?.[envKey];
+      const interval = toNum(envVal, baseInterval + 250); // add slight safety buffer
+      this.minIntervalMs.set(service, interval);
+      this.queues.set(service, Promise.resolve());
     });
   }
 
@@ -226,57 +246,75 @@ class RateLimitManager {
     fn: () => Promise<T>,
     maxRetries: number = 3
   ): Promise<T> {
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      // Wait if blocked
-      await this.waitForAvailability(service);
-      
-      // Check if we can make request
-      if (!this.canMakeRequest(service)) {
-        if (attempt === maxRetries) {
-          throw new Error(`${service} rate limit exceeded. Please try again later.`);
+    // Serialize via queue
+    const queue = this.queues.get(service) || Promise.resolve();
+    let release: () => void = () => {};
+    const next = new Promise<void>(r => (release = r));
+    this.queues.set(service, queue.then(() => next));
+
+    await queue.catch(() => {});
+
+    try {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        // Enforce min interval (based on last successful call time)
+        const minInterval = this.minIntervalMs.get(service) || 0;
+        const last = this.lastCallAt.get(service) || 0;
+        const now = Date.now();
+        const elapsed = now - last;
+        if (elapsed < minInterval) {
+          await new Promise(res => setTimeout(res, minInterval - elapsed));
         }
-        console.log(`🔄 ${service} attempt ${attempt}/${maxRetries} blocked, retrying...`);
-        continue;
-      }
 
-      try {
-        // Record the request
-        this.recordRequest(service);
-        
-        // Execute the function
-        const result = await fn();
-        
-        console.log(`✅ ${service} request successful (attempt ${attempt})`);
-        return result;
-        
-      } catch (error: any) {
-        const isRateLimitError = 
-          error.message?.toLowerCase().includes('rate limit') ||
-          error.message?.toLowerCase().includes('quota') ||
-          error.status === 429 ||
-          error.code === 'RATE_LIMIT_EXCEEDED';
+        await this.waitForAvailability(service);
 
-        if (isRateLimitError) {
-          console.log(`🚨 ${service} rate limit hit on attempt ${attempt}/${maxRetries}`);
-          
-          const waitTime = this.handleRateLimitError(service, error);
-          
+        if (!this.canMakeRequest(service)) {
           if (attempt === maxRetries) {
-            throw new Error(`${service} rate limit exceeded after ${maxRetries} attempts. Please try again in ${Math.ceil(waitTime / 60000)} minutes.`);
+            throw new Error(`${service} rate limit exceeded. Please try again later.`);
           }
-          
-          console.log(`⏳ Waiting ${Math.ceil(waitTime / 1000)}s before retry...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          
-        } else {
-          // Non-rate-limit error, don't retry
-          throw error;
+          console.log(`🔄 ${service} attempt ${attempt}/${maxRetries} blocked, retrying...`);
+          continue;
+        }
+
+        try {
+          this.recordRequest(service);
+          const result = await fn();
+          this.lastCallAt.set(service, Date.now());
+          console.log(`✅ ${service} request successful (attempt ${attempt})`);
+          return result;
+        } catch (error: any) {
+          const isRateLimitError = 
+            error?.message?.toLowerCase().includes('rate limit') ||
+            error?.message?.toLowerCase().includes('quota') ||
+            error?.status === 429 ||
+            error?.code === 'RATE_LIMIT_EXCEEDED';
+
+          if (isRateLimitError) {
+            console.log(`🚨 ${service} rate limit hit on attempt ${attempt}/${maxRetries}`);
+            const waitTime = this.handleRateLimitError(service, error);
+            if (attempt === maxRetries) {
+              throw new Error(`${service} rate limit exceeded after ${maxRetries} attempts. Please try again in ${Math.ceil(waitTime / 60000)} minutes.`);
+            }
+            console.log(`⏳ Waiting ${Math.ceil(waitTime / 1000)}s before retry...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          } else {
+            throw error;
+          }
         }
       }
+      throw new Error(`${service} failed after ${maxRetries} attempts`);
+    } finally {
+      release();
     }
+  }
 
-    throw new Error(`${service} failed after ${maxRetries} attempts`);
+  /** Manually adjust service limits at runtime (useful for dynamic downgrade) */
+  public updateServiceLimits(service: string, cfg: Partial<RateLimitConfig> & { minIntervalMs?: number }) {
+    const existing = this.configs.get(service);
+    if (!existing) return;
+    const merged = { ...existing, ...cfg } as RateLimitConfig;
+    this.configs.set(service, merged);
+    if (cfg.minIntervalMs) this.minIntervalMs.set(service, cfg.minIntervalMs);
+    console.log(`⚙️ Updated rate limits for ${service}:`, merged, 'minIntervalMs=', this.minIntervalMs.get(service));
   }
 
   /**
