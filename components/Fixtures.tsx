@@ -89,7 +89,8 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
   }, [selectedLeagueFilter]);
 
   const [isBatchFetching, setIsBatchFetching] = useState(false);
-  const viewMode = 'enhanced'; // Fixed to enhanced view
+  // View mode - currently defaulting to 'enhanced', but kept as state to avoid TS narrowing removing other branches
+  const [viewMode] = useState<'enhanced' | 'compact' | 'time-focused' | 'single-line' | 'calendar' | 'original'>('enhanced');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
 
@@ -148,40 +149,65 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
   }, [filteredMatches]);
 
   // Group matches by league - ONLY SHOW LEAGUES WITH TODAY'S GAMES, prioritize by league importance
-  const groupedMatches = useMemo(() => {
-    const today = new Date();
+  // Hard-coded league importance ordering (index = priority rank; lower = higher priority)
+  const LEAGUE_PRIORITY: string[] = [
+    League.PremierLeague,
+    League.ChampionsLeague,
+    League.LaLiga,
+    League.SerieA,
+    League.Bundesliga,
+    League.Ligue1,
+    League.PrimeiraLiga,
+    League.Eredivisie,
+    League.ArgentineLigaProfesional,
+    League.BrasileiraoSerieA,
+    League.Championship,
+    League.MLS,
+    League.LigaMX,
+    League.SuperLig,
+    League.ScottishPremiership,
+    League.BelgianProLeague,
+    League.EuropaLeague,
+    League.EuropaConferenceLeague,
+    League.CopaLibertadores,
+    League.AFCChampionsLeague
+  ];
 
-    // Group matches by league for TODAY first
+  const { groupedMatches, isTodayMode } = useMemo(() => {
+    const today = new Date();
     const groupsToday: { [key: string]: Match[] } = {};
     const groupsUpcoming: { [key: string]: Match[] } = {};
 
     filteredMatches.forEach(match => {
       const matchDate = new Date(match.date);
       const target = isSameLondonDay(matchDate, today) ? groupsToday : groupsUpcoming;
-      if (!target[match.league]) {
-        target[match.league] = [];
-      }
+      if (!target[match.league]) target[match.league] = [];
       target[match.league].push(match);
     });
 
-    // Prefer TODAY groups; if none, fallback to UPCOMING groups
-    const base = Object.keys(groupsToday).length > 0 ? groupsToday : groupsUpcoming;
+    const useToday = Object.keys(groupsToday).length > 0;
+    const base = useToday ? groupsToday : groupsUpcoming;
 
-    // Sort matches within each league by time
+    // Sort matches within each league by kickoff time
     Object.keys(base).forEach(league => {
       base[league].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     });
 
-    // Sort league groups alphabetically for a neutral default ordering
-    const sortedEntries = Object.entries(base).sort(([a], [b]) => a.localeCompare(b));
+    const priorityRank = (leagueName: string): number => {
+      const idx = LEAGUE_PRIORITY.indexOf(leagueName);
+      return idx === -1 ? 999 : idx; // Unlisted leagues sink to bottom, keep alphabetical among themselves
+    };
 
-    // Prefix label to clarify whether these are TODAY or UPCOMING
-    const labeled = sortedEntries.map(([league, matches]) => ([
-      `${Object.keys(groupsToday).length > 0 ? '🔥 TODAY - ' : '📅 UPCOMING - '}${league}`,
-      matches
-    ] as const));
+    const sortedEntries = Object.entries(base).sort(([a], [b]) => {
+      const diff = priorityRank(a) - priorityRank(b);
+      if (diff !== 0) return diff;
+      return a.localeCompare(b);
+    });
 
-    return Object.fromEntries(labeled);
+    return {
+      groupedMatches: Object.fromEntries(sortedEntries),
+      isTodayMode: useToday
+    };
   }, [filteredMatches]);
 
 
@@ -221,7 +247,7 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
   }
 
   const renderContent = () => {
-    const totalFixtures = Object.values(groupedMatches).flat().length;
+  const totalFixtures = Object.values(groupedMatches).flat().length;
 
     if (totalFixtures === 0) {
         return (
@@ -238,14 +264,14 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
 
     return (
         <div className="space-y-6 sm:space-y-8">
-            {Object.entries(groupedMatches).map(([leagueName, matches]) => (
+      {Object.entries(groupedMatches).map(([leagueName, matches]) => (
                 <section key={leagueName} className="bg-gray-800 rounded-xl p-4 sm:p-6 shadow-2xl border border-gray-700 mx-4 sm:mx-0">
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center space-x-3">
                             <div className="text-blue-400 text-xl">🏆</div>
-                            <h2 className="text-lg sm:text-xl font-bold text-white">
-                                {leagueName}
-                            </h2>
+              <h2 className="text-lg sm:text-xl font-bold text-white">
+                {isTodayMode ? '🔥 TODAY - ' : '📅 UPCOMING - '}{leagueName}
+              </h2>
                         </div>
                         <div className="text-sm text-gray-300 bg-gray-700 px-3 py-1 rounded-full">
                             {matches.length} {matches.length === 1 ? 'fixture' : 'fixtures'}
@@ -328,9 +354,7 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-3">
                     <div className="text-blue-400 text-xl">🏆</div>
-                    <h2 className="text-lg sm:text-xl font-bold text-white">
-                      {leagueName}
-                    </h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">{isTodayMode ? '🔥 TODAY - ' : '📅 UPCOMING - '}{leagueName}</h2>
                   </div>
                   <div className="text-sm text-gray-300 bg-gray-700 px-3 py-1 rounded-full">
                     {matches.length} {matches.length === 1 ? 'fixture' : 'fixtures'}
@@ -364,9 +388,7 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-3">
                     <div className="text-blue-400 text-xl">🏆</div>
-                    <h2 className="text-lg sm:text-xl font-bold text-white">
-                      {leagueName}
-                    </h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">{isTodayMode ? '🔥 TODAY - ' : '📅 UPCOMING - '}{leagueName}</h2>
                   </div>
                   <div className="text-sm text-gray-300 bg-gray-700 px-3 py-1 rounded-full">
                     {matches.length} {matches.length === 1 ? 'fixture' : 'fixtures'}
@@ -390,9 +412,7 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-3">
                     <div className="text-blue-400 text-xl">🏆</div>
-                    <h2 className="text-lg sm:text-xl font-bold text-white">
-                      {leagueName}
-                    </h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">{isTodayMode ? '🔥 TODAY - ' : '📅 UPCOMING - '}{leagueName}</h2>
                   </div>
                   <div className="text-sm text-gray-300 bg-gray-700 px-3 py-1 rounded-full">
                     {matches.length} {matches.length === 1 ? 'fixture' : 'fixtures'}
@@ -416,9 +436,7 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-3">
                     <div className="text-blue-400 text-xl">🏆</div>
-                    <h2 className="text-lg sm:text-xl font-bold text-white">
-                      {leagueName}
-                    </h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">{isTodayMode ? '🔥 TODAY - ' : '📅 UPCOMING - '}{leagueName}</h2>
                   </div>
                   <div className="text-sm text-gray-300 bg-gray-700 px-3 py-1 rounded-full">
                     {matches.length} {matches.length === 1 ? 'fixture' : 'fixtures'}
@@ -442,9 +460,7 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-3">
                     <div className="text-blue-400 text-xl">🏆</div>
-                    <h2 className="text-lg sm:text-xl font-bold text-white">
-                      {leagueName}
-                    </h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">{isTodayMode ? '🔥 TODAY - ' : '📅 UPCOMING - '}{leagueName}</h2>
                   </div>
                   <div className="text-sm text-gray-300 bg-gray-700 px-3 py-1 rounded-full">
                     {matches.length} {matches.length === 1 ? 'fixture' : 'fixtures'}
@@ -479,9 +495,7 @@ const Fixtures: React.FC<FixturesProps> = ({ onSelectMatch, onSelectTeam, onSele
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-3">
                     <div className="text-blue-400 text-xl">🏆</div>
-                    <h2 className="text-lg sm:text-xl font-bold text-white">
-                      {leagueName}
-                    </h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">{isTodayMode ? '🔥 TODAY - ' : '📅 UPCOMING - '}{leagueName}</h2>
                   </div>
                   <div className="text-sm text-gray-300 bg-gray-700 px-3 py-1 rounded-full">
                     {matches.length} {matches.length === 1 ? 'fixture' : 'fixtures'}

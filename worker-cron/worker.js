@@ -18,6 +18,24 @@ export default {
         timestamp,
         status: 'running'
       };
+      // Also persist a running marker early (KV durability)
+      if (env.PREDICTIONS_KV) {
+        try {
+          const execId = `${timestamp}_${event.cron.replace(/\s+/g,'_')}`;
+          await env.PREDICTIONS_KV.put('cron:lastExecution', JSON.stringify({
+            schedule: event.cron,
+            startedAt: timestamp,
+            status: 'running'
+          }));
+          await env.PREDICTIONS_KV.put(`cron:exec:${execId}`, JSON.stringify({
+            schedule: event.cron,
+            startedAt: timestamp,
+            status: 'running'
+          }));
+        } catch (e) {
+          console.warn('KV persist (start) failed:', e.message);
+        }
+      }
       
       // Determine which function to call based on schedule
       // Support both cron patterns: explicit hours (wrangler.toml) and generic every 6 hours
@@ -37,6 +55,21 @@ export default {
       globalThis.lastCronExecution.completedAt = new Date().toISOString();
       
       console.log('✅ Cron job completed successfully');
+      if (env.PREDICTIONS_KV) {
+        try {
+          const completed = { ...globalThis.lastCronExecution };
+            await env.PREDICTIONS_KV.put('cron:lastExecution', JSON.stringify(completed));
+            // Append pointer list for history (bounded to last 25)
+            const listRaw = await env.PREDICTIONS_KV.get('cron:history:index');
+            let list = [];
+            if (listRaw) { try { list = JSON.parse(listRaw); } catch {} }
+            list.unshift({ schedule: completed.schedule, startedAt: completed.timestamp, completedAt: completed.completedAt, type: completed.type, status: completed.status });
+            list = list.slice(0,25);
+            await env.PREDICTIONS_KV.put('cron:history:index', JSON.stringify(list));
+        } catch (e) {
+          console.warn('KV persist (complete) failed:', e.message);
+        }
+      }
       
     } catch (error) {
       console.error('❌ Cron job failed:', error);
@@ -44,6 +77,14 @@ export default {
       if (globalThis.lastCronExecution) {
         globalThis.lastCronExecution.status = 'failed';
         globalThis.lastCronExecution.error = error.message;
+      }
+      if (env.PREDICTIONS_KV) {
+        try {
+          const failed = { ...globalThis.lastCronExecution };
+          await env.PREDICTIONS_KV.put('cron:lastExecution', JSON.stringify(failed));
+        } catch (e) {
+          console.warn('KV persist (failure) failed:', e.message);
+        }
       }
       
       // Optional: Send alert to a monitoring service
@@ -136,7 +177,8 @@ export default {
 
     if (url.pathname === '/trigger-predictions') {
       try {
-        const result = await triggerPredictionUpdate(env);
+        const force = url.searchParams.get('force') === 'true';
+        const result = await triggerPredictionUpdate(env, force);
         return new Response(JSON.stringify(result), { 
           status: 200,
           headers: { 'Content-Type': 'application/json', ...cors }
@@ -185,22 +227,38 @@ export default {
         minute: '2-digit',
         second: '2-digit'
       }).format(now);
-
+      let persistedLast = null;
+      if (env.PREDICTIONS_KV) {
+        try { persistedLast = await env.PREDICTIONS_KV.get('cron:lastExecution', 'json'); } catch {}
+      }
       return new Response(JSON.stringify({
-        currentTime: now.toISOString(),
-        ukTime: ukTime,
-        lastCronExecution: globalThis.lastCronExecution || 'No cron execution recorded yet',
-        cronSchedules: {
-          predictions: '0 6,12,18,23 * * * (6AM, 12PM, 6PM, 11PM UK)',
-          scores: '15 * * * * (Every hour at 15 minutes past)'
-        },
-        nextTriggers: {
-          scores: getNextHourlyTrigger(),
-          predictions: getNextPredictionTrigger()
-        }
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+          currentTime: now.toISOString(),
+          ukTime: ukTime,
+          lastCronExecution: globalThis.lastCronExecution || persistedLast || 'No cron execution recorded yet',
+          cronSchedules: {
+            predictions: '0 6,12,18,23 * * * (6AM, 12PM, 6PM, 11PM UK)',
+            scores: '15 * * * * (Every hour at 15 minutes past)'
+          },
+          nextTriggers: {
+            scores: getNextHourlyTrigger(),
+            predictions: getNextPredictionTrigger()
+          },
+          persistence: !!env.PREDICTIONS_KV
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+    }
+    if (url.pathname === '/cron-history') {
+      if (!env.PREDICTIONS_KV) {
+        return new Response(JSON.stringify({ error: 'KV unavailable'}), { status: 500, headers: { 'Content-Type':'application/json' }});
+      }
+      try {
+        const listRaw = await env.PREDICTIONS_KV.get('cron:history:index');
+        const history = listRaw ? JSON.parse(listRaw) : [];
+        return new Response(JSON.stringify({ count: history.length, history }), { headers: { 'Content-Type':'application/json' }});
+      } catch (e) {
+        return new Response(JSON.stringify({ error: 'history-read-failed', message: e.message }), { status: 500, headers: { 'Content-Type':'application/json' }});
+      }
     }
     
   return new Response(`FixtureCast Cron Worker
@@ -236,7 +294,7 @@ const FEATURED_LEAGUE_IDS = new Set([
 /**
  * Trigger prediction generation directly in Worker
  */
-async function triggerPredictionUpdate(env) {
+async function triggerPredictionUpdate(env, force = false) {
   console.log('🤖 Triggering prediction update...');
   
   try {
@@ -264,11 +322,11 @@ async function triggerPredictionUpdate(env) {
     
     // Idempotency (Feature C): if daily aggregate already exists and not forced, skip generation
     const todayStr = new Date().toISOString().slice(0,10);
-    if (env.PREDICTIONS_KV && !/force=true/i.test(env.FORCE_PREDICT || '')) {
+    if (env.PREDICTIONS_KV && !force) {
       try {
         const existingDaily = await env.PREDICTIONS_KV.get(`daily:${todayStr}:predictions`);
         if (existingDaily) {
-          console.log('⏭️  Skipping prediction generation (daily aggregate exists). Set FORCE_PREDICT=force=true to override.');
+          console.log('⏭️  Skipping prediction generation (daily aggregate exists). Use ?force=true to override.');
           return { skipped: true, reason: 'already-generated', date: todayStr };
         }
       } catch (e) {
