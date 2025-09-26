@@ -3,6 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Prediction, Match, ConfidenceLevel, PredictionContext } from '../types';
 import { calculatePredictionConfidence } from './confidenceService';
 import { storeDailyPrediction } from './accuracyService';
+import { withRateLimit } from './rateLimitService';
 
 // Use environment variable for API key
 const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY;
@@ -295,48 +296,27 @@ OUTPUT FORMAT
 - However, you MUST serialize the JSON to match the response schema supplied by the system (do not invent fields). If some inputs are not available, still produce calibrated outputs and reflect uncertainty.
 `;
 
-    // Throttle + retry wrapper
-    const runGemini = async () => {
-      let lastErr: any = null;
-      for (let attempt = 0; attempt <= GEMINI_RETRY; attempt++) {
-        try {
-          // Reset daily counter if needed
-          resetDailyCounterIfNeeded();
-          
-          const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: predictionSchema,
-            },
-          });
-          
-          // Track successful API call
-          geminiCallCount++;
-          geminiCallsToday++;
-          console.log(`✅ Gemini API call #${geminiCallCount} (${geminiCallsToday} today) - ${match.homeTeam} vs ${match.awayTeam}`);
-          
-          return response;
-        } catch (e: any) {
-          lastErr = e;
-          const msg = String(e?.message || e);
-          const retryable = /quota|rate|429|unavailable|timeout/i.test(msg);
-          if (retryable && attempt < GEMINI_RETRY) {
-            const wait = GEMINI_BACKOFF_MS * Math.pow(2, attempt) + Math.floor(Math.random() * 250);
-            console.warn(`⚠️ Gemini retry (${attempt + 1}/${GEMINI_RETRY}) after ${wait}ms: ${msg}`);
-            await delay(wait);
-            continue;
-          }
-          throw e;
-        }
-      }
-      throw lastErr || new Error('Gemini error');
-    };
-
-    // Serialize requests via queue to reduce burstiness
-    geminiQueue = geminiQueue.then(() => runGemini());
-    const response = await geminiQueue;
+    // Generate AI prediction with rate limiting and retry
+    const response = await withRateLimit('gemini', async () => {
+      // Reset daily counter if needed
+      resetDailyCounterIfNeeded();
+      
+      const result = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: predictionSchema,
+        },
+      });
+      
+      // Track successful API call
+      geminiCallCount++;
+      geminiCallsToday++;
+      console.log(`✅ Gemini API call #${geminiCallCount} (${geminiCallsToday} today) - ${match.homeTeam} vs ${match.awayTeam}`);
+      
+      return result;
+    }, GEMINI_RETRY + 1);
     
     const jsonText = response.text.trim();
     const predictionData = JSON.parse(jsonText);

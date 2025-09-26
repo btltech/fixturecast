@@ -137,68 +137,18 @@ class RealTimeService {
 
   // Simulate fetching live match data
   private async fetchLiveMatchData(): Promise<LiveMatchData[]> {
-    // This would be replaced with actual API calls
-    const now = new Date();
+    // TODO: Implement real API integration for live match data
     const liveMatches: LiveMatchData[] = [];
-
-    // Simulate some live matches
-    const mockLiveMatches = [
-      {
-        matchId: 'live-1',
-        status: 'live' as MatchStatus,
-        minute: Math.floor(Math.random() * 90) + 1,
-        homeScore: Math.floor(Math.random() * 3),
-        awayScore: Math.floor(Math.random() * 3),
-        isLive: true,
-        lastUpdated: now.toISOString(),
-        events: this.generateMockEvents()
-      },
-      {
-        matchId: 'live-2',
-        status: 'ht' as MatchStatus,
-        minute: 45,
-        homeScore: Math.floor(Math.random() * 2),
-        awayScore: Math.floor(Math.random() * 2),
-        isLive: true,
-        lastUpdated: now.toISOString(),
-        events: this.generateMockEvents()
-      }
-    ];
-
-    return mockLiveMatches;
+    
+    console.log('🔄 Fetching live matches from API...');
+    // Add actual API calls here when ready
+    
+    return liveMatches;
   }
 
-  // Generate mock match events
-  private generateMockEvents(): MatchEvent[] {
-    const events: MatchEvent[] = [];
-    const eventTypes: MatchEvent['type'][] = ['goal', 'card', 'substitution', 'var'];
-    const players = ['Player A', 'Player B', 'Player C', 'Player D'];
 
-    for (let i = 0; i < Math.floor(Math.random() * 5) + 1; i++) {
-      events.push({
-        id: `event-${i}`,
-        type: eventTypes[Math.floor(Math.random() * eventTypes.length)],
-        minute: Math.floor(Math.random() * 90) + 1,
-        team: Math.random() > 0.5 ? 'home' : 'away',
-        player: players[Math.floor(Math.random() * players.length)],
-        description: this.generateEventDescription(eventTypes[Math.floor(Math.random() * eventTypes.length)]),
-        timestamp: new Date().toISOString()
-      });
-    }
 
-    return events.sort((a, b) => a.minute - b.minute);
-  }
 
-  // Generate event description
-  private generateEventDescription(type: MatchEvent['type']): string {
-    const descriptions = {
-      goal: 'Goal scored!',
-      card: 'Yellow card shown',
-      substitution: 'Substitution made',
-      var: 'VAR check in progress'
-    };
-    return descriptions[type];
-  }
 
   // Get live matches
   getLiveMatches(): LiveMatchData[] {

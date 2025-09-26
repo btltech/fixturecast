@@ -21,6 +21,7 @@ const PredictionDetail = React.lazy(() => import('./components/PredictionDetail'
 const TodaysPredictions = React.lazy(() => import('./components/TodaysPredictions'));
 const AccuracyDashboard = React.lazy(() => import('./components/AccuracyDashboard'));
 const DisclaimerPage = React.lazy(() => import('./components/DisclaimerPage'));
+const LocalPredictionPage = React.lazy(() => import('./components/LocalPredictionPage'));
 // Scheduler components removed from public site - admin access via AWS Console only
 
 // Wrapper component to handle navigation and provide router context
@@ -166,6 +167,22 @@ const AppContent: React.FC = () => {
       <Route
         path="/accuracy"
         element={<AccuracyDashboard />}
+      />
+
+      {/* Gemini Flash Prediction */}
+      <Route
+        path="/predictions"
+        element={<LocalPredictionPage />}
+      />
+
+      {/* Redirect old routes */}
+      <Route
+        path="/dual-prediction"
+        element={<Navigate to="/predictions" replace />}
+      />
+      <Route
+        path="/local-prediction"
+        element={<Navigate to="/predictions" replace />}
       />
 
       {/* Disclaimer Page */}

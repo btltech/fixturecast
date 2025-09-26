@@ -92,9 +92,7 @@ export class EventBridgeSchedulerService {
       }
 
       if (!accessKeyId || !secretAccessKey) {
-        console.warn('AWS credentials not found. EventBridge Scheduler will run in mock mode.');
-        this.initializeMockMode();
-        return;
+        throw new Error('AWS credentials not found. Please configure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.');
       }
 
       this.config = {
@@ -116,7 +114,7 @@ export class EventBridgeSchedulerService {
       
     } catch (error) {
       console.error('Failed to initialize EventBridge Scheduler service:', error);
-      this.initializeMockMode();
+      throw error;
     }
   }
 
@@ -139,22 +137,7 @@ export class EventBridgeSchedulerService {
     }
   }
 
-  /**
-   * Initialize mock mode for development/testing
-   */
-  private initializeMockMode(): void {
-    console.log('🧪 EventBridge Scheduler running in mock mode');
-    this.isInitialized = true;
-    this.scheduler = new MockSchedulerClient();
-    this.eventBridge = new MockEventBridgeClient();
-    this.config = {
-      region: 'us-east-1',
-      accessKeyId: 'mock-key',
-      secretAccessKey: 'mock-secret',
-      scheduleGroupName: 'fixturecast-schedules-mock',
-      defaultRoleArn: 'arn:aws:iam::123456789012:role/mock-scheduler-role'
-    };
-  }
+
 
   /**
    * Create a new schedule
@@ -463,7 +446,7 @@ export class EventBridgeSchedulerService {
    */
   public getStatus(): {
     initialized: boolean;
-    mode: 'AWS' | 'MOCK';
+    mode: 'AWS';
     region?: string;
     scheduledTasks: number;
     activeTasks: number;
@@ -471,7 +454,7 @@ export class EventBridgeSchedulerService {
     const tasks = Array.from(this.scheduledTasks.values());
     return {
       initialized: this.isInitialized,
-      mode: this.config?.accessKeyId === 'mock-key' ? 'MOCK' : 'AWS',
+      mode: 'AWS',
       region: this.config?.region,
       scheduledTasks: tasks.length,
       activeTasks: tasks.filter(t => t.enabled && t.status === 'ACTIVE').length
@@ -507,50 +490,8 @@ export class EventBridgeSchedulerService {
   }
 }
 
-/**
- * Mock clients for development/testing
- */
-class MockSchedulerClient {
-  private schedules = new Map<string, any>();
 
-  async createSchedule(input: any): Promise<any> {
-    console.log('🧪 Mock: Creating schedule', input.Name);
-    this.schedules.set(input.Name, input);
-    return { ScheduleArn: `arn:aws:scheduler:us-east-1:123456789012:schedule/mock/${input.Name}` };
-  }
 
-  async updateSchedule(input: any): Promise<any> {
-    console.log('🧪 Mock: Updating schedule', input.Name);
-    const existing = this.schedules.get(input.Name);
-    if (existing) {
-      this.schedules.set(input.Name, { ...existing, ...input });
-    }
-    return {};
-  }
-
-  async deleteSchedule(input: any): Promise<any> {
-    console.log('🧪 Mock: Deleting schedule', input.Name);
-    this.schedules.delete(input.Name);
-    return {};
-  }
-
-  async getSchedule(input: any): Promise<any> {
-    return this.schedules.get(input.Name) || null;
-  }
-
-  async listSchedules(input: any): Promise<any> {
-    return {
-      Schedules: Array.from(this.schedules.values())
-    };
-  }
-}
-
-class MockEventBridgeClient {
-  async putEvents(input: any): Promise<any> {
-    console.log('🧪 Mock: Putting events', input);
-    return { Entries: input.Entries.map(() => ({ EventId: 'mock-event-id' })) };
-  }
-}
 
 // Create singleton instance
 export const eventBridgeSchedulerService = new EventBridgeSchedulerService();

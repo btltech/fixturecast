@@ -1,0 +1,28 @@
+# Updated wrangler.toml for Cloudflare Cron
+# This configuration enables scheduled tasks on Cloudflare
+
+name = "fixturecast"
+compatibility_date = "2024-01-15"
+pages_build_output_dir = "dist"
+
+# Cron Triggers - Automated Prediction Updates
+[triggers]
+crons = [
+  "0 */6 * * *",    # Every 6 hours
+  "30 8 * * *",     # Daily at 8:30 AM UTC  
+  "0 18 * * *"      # Daily at 6:00 PM UTC
+]
+
+[env.production]
+[[env.production.kv_namespaces]]
+binding = "PREDICTIONS_KV"
+id = "f00e18bfc6a44f3d876bd4448003e1f5"
+preview_id = "f00e18bfc6a44f3d876bd4448003e1f5"
+
+# Environment Variables (Set these in Cloudflare Dashboard)
+# GEMINI_API_KEY = "your-gemini-api-key"
+# FOOTBALL_API_KEY = "your-football-api-key"
+# PREDICTION_API_KEY = "your-prediction-api-key"
+
+# Note: Deploy this wrangler.toml separately to Cloudflare
+# Don't commit to git - keep production config separate
