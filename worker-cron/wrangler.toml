@@ -1,0 +1,22 @@
+name = "fixturecast-cron-worker"
+main = "worker.js"
+compatibility_date = "2024-01-15"
+
+# Cron Triggers
+[triggers]
+crons = [
+  "0 */6 * * *",    # Every 6 hours - Generate predictions
+  "15 * * * *"      # Every hour at 15 minutes past - Update scores
+]
+
+# Environment Variables
+[vars]
+FIXTURECAST_DOMAIN = "https://fixturecast.pages.dev"
+
+# Secrets (set via CLI or dashboard)
+# wrangler secret put PREDICTION_API_KEY
+# wrangler secret put ERROR_WEBHOOK_URL (optional)
+
+# Production environment
+[env.production.vars]
+FIXTURECAST_DOMAIN = "https://fixturecast.com"
