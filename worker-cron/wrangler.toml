@@ -2,6 +2,12 @@ name = "fixturecast-cron-worker"
 main = "worker.js"
 compatibility_date = "2024-01-15"
 
+[[kv_namespaces]]
+binding = "PREDICTIONS_KV"
+# Use the same namespace ID as Pages (update if different in Cloudflare dashboard)
+id = "f00e18bfc6a44f3d876bd4448003e1f5"
+preview_id = "f00e18bfc6a44f3d876bd4448003e1f5"
+
 # Cron Triggers (UK-friendly times)
 [triggers]
 crons = [
