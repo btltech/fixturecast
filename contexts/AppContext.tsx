@@ -1,6 +1,6 @@
 import React, { createContext, useState, useCallback, useMemo, useContext, ReactNode, useEffect, useRef } from 'react';
 import { nowLondonDateString, isSameLondonDay } from '../utils/timezone';
-import { Match, Prediction, Toast as ToastType, Alert, PastPrediction, Team, LeagueTableRow, League, AppData, AlertType, PredictionAccuracy, AccuracyStats, LiveMatch, LiveMatchUpdate } from '../types';
+import { Match, Prediction, Toast as ToastType, Alert, PastPrediction, Team, LeagueTableRow, League, AppData, AlertType, PredictionAccuracy, AccuracyStats, LiveMatch, LiveMatchUpdate, ConfidenceLevel } from '../types';
 import { getMatchPrediction } from '../services/geminiService';
 import { buildContextForMatch } from '../utils/contextUtils';
 import { getAllKnownTeams, getTeamData } from '../services/teamDataService';
@@ -28,7 +28,6 @@ import {
 } from '../services/footballApiService';
 // // import { generatePredictionsForMatches } from '../services/predictionService';
 import { advancedPredictionSyncService } from '../services/advancedPredictionSyncService';
-import { resultCheckerService } from '../services/resultCheckerService';
 
 interface AppContextType {
     // State
@@ -224,6 +223,79 @@ export const AppProvider: React.FC<{ children: ReactNode; value?: Partial<AppCon
             setPastPredictions(pastPredictions);
             } catch (error) {
                 console.warn("Could not load past predictions:", error);
+            }
+
+            // Load today's predictions from generated file
+            try {
+                const currentPredictionsRes = await fetch('./predictions-data.json');
+                const currentPredictionsData = await currentPredictionsRes.json();
+                console.log('🎯 Loaded current predictions:', currentPredictionsData);
+                
+                if (currentPredictionsData.predictions && currentPredictionsData.predictions.length > 0) {
+                    const todaysPredictions: { [matchId: string]: Prediction } = {};
+                    const todaysMatches: Match[] = [];
+                    
+                    currentPredictionsData.predictions.forEach((pred: any) => {
+                        if (pred.matchId && pred.prediction) {
+                            const confidence = pred.prediction.confidence || 50;
+                            
+                            // Create prediction object
+                            todaysPredictions[pred.matchId.toString()] = {
+                                homeWinProbability: confidence,
+                                drawProbability: Math.max(0, 100 - confidence - 25),
+                                awayWinProbability: 25,
+                                predictedScoreline: pred.prediction.predictedScore || '1-1',
+                                confidence: confidence > 80 ? ConfidenceLevel.High : confidence > 60 ? ConfidenceLevel.Medium : ConfidenceLevel.Low,
+                                keyFactors: [{
+                                    category: 'AI Analysis',
+                                    points: [pred.prediction.outcome || 'Predicted outcome']
+                                }],
+                                goalLine: {
+                                    line: 2.5,
+                                    overProbability: pred.prediction.overUnder === 'Over 2.5' ? 60 : 40,
+                                    underProbability: pred.prediction.overUnder === 'Under 2.5' ? 60 : 40
+                                },
+                                btts: {
+                                    yesProbability: pred.prediction.btts === 'Yes' ? 60 : 40,
+                                    noProbability: pred.prediction.btts === 'No' ? 60 : 40
+                                }
+                            };
+                            
+                            // Create match object for fixtures that might not be loaded
+                            const matchExists = criticalFixtures.some(fixture => fixture.id === pred.matchId.toString());
+                            if (!matchExists) {
+                                todaysMatches.push({
+                                    id: pred.matchId.toString(),
+                                    homeTeam: pred.homeTeam,
+                                    awayTeam: pred.awayTeam,
+                                    homeTeamId: pred.matchId, // Use matchId as placeholder
+                                    awayTeamId: pred.matchId + 1, // Use matchId+1 as placeholder
+                                    league: pred.league as League,
+                                    date: pred.matchDate,
+                                    venue: pred.venue || '',
+                                    status: 'NS',
+                                    homeScore: null,
+                                    awayScore: null
+                                });
+                            }
+                        }
+                    });
+                    
+                    // Add today's predicted matches to fixtures
+                    const updatedFixtures = [...criticalFixtures, ...todaysMatches];
+                    
+                    setPredictionCache(todaysPredictions);
+                    addToast(`Loaded ${currentPredictionsData.predictions.length} predictions for today!`, "success");
+                    console.log('✅ Today\'s predictions loaded into cache:', todaysPredictions);
+                    
+                    // Update fixtures to include predicted matches
+                    setAppData(prev => ({ 
+                        ...prev, 
+                        fixtures: updatedFixtures 
+                    }));
+                }
+            } catch (error) {
+                console.warn("Could not load current predictions:", error);
             }
             
             // Set initial data

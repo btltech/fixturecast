@@ -100,23 +100,33 @@ export default {
       }
     }
 
-    // Accuracy trend (last 7 days): /accuracy/trend
-    if (url.pathname === '/accuracy/trend') {
+    // Accuracy trend (last N days): /accuracy/trend
+  if (url.pathname === '/accuracy/trend') {
       try {
         if (!env.PREDICTIONS_KV) return new Response(JSON.stringify({ error: 'KV unavailable'}), { status: 500, headers: { 'Content-Type':'application/json', ...cors }});
         const days = parseInt(url.searchParams.get('days') || '7', 10);
         const today = new Date();
         const result = [];
-        for (let i=1; i<=days; i++) { // use past completed days
+        for (let i=1; i<=days; i++) { // use past fully processed days (exclude today live)
           const d = new Date(today.getTime() - i*24*60*60*1000);
-            const ds = d.toISOString().slice(0,10);
-            const aggKey = `accuracy:${ds}:aggregate`;
-            const data = await env.PREDICTIONS_KV.get(aggKey, 'json');
-            if (data && data.stats) {
-              result.push({ date: ds, overallAccuracyPct: data.stats.overallAccuracyPct, processed: data.stats.processed });
-            } else {
-              result.push({ date: ds, overallAccuracyPct: null, processed: 0 });
-            }
+          const ds = d.toISOString().slice(0,10);
+          const aggKey = `accuracy:${ds}:aggregate`;
+          const data = await env.PREDICTIONS_KV.get(aggKey, 'json');
+          if (data && data.stats) {
+            const s = data.stats;
+            result.push({
+              date: ds,
+              overallAccuracyPct: s.overallAccuracyPct,
+              processed: s.processed,
+              // Use existing field name exactScoreAccuracyPct but also expose a generic alias scoreAccuracyPct for future UI
+              outcomeAccuracyPct: s.outcomeAccuracyPct ?? null,
+              exactScoreAccuracyPct: s.exactScoreAccuracyPct ?? null,
+              scoreAccuracyPct: s.exactScoreAccuracyPct ?? null,
+              bttsAccuracyPct: s.bttsAccuracyPct ?? null
+            });
+          } else {
+            result.push({ date: ds, overallAccuracyPct: null, processed: 0, outcomeAccuracyPct: null, exactScoreAccuracyPct: null, scoreAccuracyPct: null, bttsAccuracyPct: null });
+          }
         }
         return new Response(JSON.stringify({ days: result.length, trend: result.reverse() }), { headers: { 'Content-Type':'application/json', ...cors }});
       } catch (e) {
