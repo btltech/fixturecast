@@ -15,6 +15,12 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
   const { accuracyStats } = useAppContext();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authInput, setAuthInput] = useState('');
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+
+  // Admin authentication key (in production, this should be more secure)
+  const ADMIN_KEY = 'fixturecast-admin-2024';
 
   // Safe access to accuracyStats with fallbacks
   const safeAccuracyStats = {
@@ -34,15 +40,43 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
     }
   };
 
-  // Force check results (REAL API call)
+  // Authentication handler
+  const handleAuth = () => {
+    if (authInput === ADMIN_KEY) {
+      setIsAuthenticated(true);
+      setShowAuthPrompt(false);
+      setAuthInput('');
+      setError(null);
+    } else {
+      setError('❌ Invalid authorization key');
+      setAuthInput('');
+    }
+  };
+
+  // Check if user wants to force check
+  const handleForceCheckRequest = () => {
+    if (!isAuthenticated) {
+      setShowAuthPrompt(true);
+      setError(null);
+    } else {
+      handleForceCheck();
+    }
+  };
+
+  // Force check results (SECURED API call)
   const handleForceCheck = async () => {
+    if (!isAuthenticated) {
+      setError('❌ Unauthorized: Admin access required');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('🔄 Manual force check triggered...');
+      console.log('🔄 Authorized manual force check triggered...');
       
-      // Call the actual automation API
+      // Call the actual automation API with admin context
       const response = await fetch('/api/update-results', {
         method: 'POST',
         headers: {
@@ -50,9 +84,11 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          trigger: 'manual_force_check',
+          trigger: 'manual_force_check_authorized',
           timestamp: new Date().toISOString(),
-          source: 'accuracy_dashboard'
+          source: 'accuracy_dashboard',
+          admin_authorized: true,
+          auth_level: 'admin'
         })
       });
       
@@ -63,15 +99,17 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
       const result = await response.json();
       
       if (result.success) {
-        console.log('✅ Force check completed successfully:', result.results);
-        // Optionally trigger a refresh of accuracy data
-        // You could add a callback here to refresh the dashboard
+        console.log('✅ Authorized force check completed successfully:', result.results);
+        setError(null); // Clear any previous errors
+        // Show success message
+        setError('✅ Force check completed successfully!');
+        setTimeout(() => setError(null), 3000); // Clear after 3 seconds
       } else {
         throw new Error(result.message || 'Force check returned an error');
       }
       
     } catch (err) {
-      console.error('❌ Error during force check:', err?.message || String(err));
+      console.error('❌ Error during authorized force check:', err?.message || String(err));
       setError(`Failed to check results: ${err?.message || 'Please try again.'}`);
     } finally {
       setIsLoading(false);
@@ -147,10 +185,21 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
         </div>
         
         <div className="flex items-center space-x-4">
+          {/* Authentication Status */}
+          {isAuthenticated && (
+            <div className="flex items-center space-x-2 px-3 py-1 bg-green-500/20 text-green-400 border border-green-500/30 rounded-md text-sm">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>Admin</span>
+            </div>
+          )}
+          
+          {/* Force Check Button */}
           <button
-            onClick={handleForceCheck}
+            onClick={handleForceCheckRequest}
             disabled={isLoading}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center space-x-2"
+            className={`px-4 py-2 ${isAuthenticated ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center space-x-2`}
           >
             {isLoading && (
               <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -158,7 +207,15 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             )}
-            <span>{isLoading ? 'Checking Results...' : '🔄 Manual Update'}</span>
+            {!isAuthenticated && !isLoading && (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6V9a2 2 0 00-2-2H8a2 2 0 00-2 2v2m8 0V9a2 2 0 00-2-2H8a2 2 0 00-2 2v2m8 0H6" />
+              </svg>
+            )}
+            <span>
+              {isLoading ? 'Checking Results...' : 
+               isAuthenticated ? '🔄 Manual Update' : '🔒 Admin Update'}
+            </span>
           </button>
         </div>
       </div>
@@ -298,6 +355,76 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
           <p className="text-sm text-gray-500 mt-1">Results will appear here after matches are completed</p>
         </div>
       </div>
+
+      {/* Authentication Modal */}
+      {showAuthPrompt && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-white flex items-center">
+                <svg className="w-5 h-5 mr-2 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6V9a2 2 0 00-2-2H8a2 2 0 00-2 2v2m8 0V9a2 2 0 00-2-2H8a2 2 0 00-2 2v2m8 0H6" />
+                </svg>
+                Admin Authorization Required
+              </h3>
+              <button
+                onClick={() => setShowAuthPrompt(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-gray-300 mb-3">
+                🔒 The Force Check feature is restricted to authorized administrators only.
+              </p>
+              <p className="text-sm text-gray-400 mb-4">
+                This prevents unauthorized manual updates and protects system integrity.
+              </p>
+              
+              <input
+                type="password"
+                placeholder="Enter admin authorization key"
+                value={authInput}
+                onChange={(e) => setAuthInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={handleAuth}
+                disabled={!authInput.trim()}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-md transition-colors flex items-center justify-center"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                </svg>
+                Authorize
+              </button>
+              <button
+                onClick={() => {
+                  setShowAuthPrompt(false);
+                  setAuthInput('');
+                  setError(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {error && error.includes('Invalid') && (
+              <div className="mt-3 p-3 bg-red-500/20 border border-red-500/30 rounded-md">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
