@@ -14,7 +14,10 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "cf:login": "wrangler login",
+    "cf:deploy": "wrangler pages deploy dist --project-name fixturecast",
+    "cf:secret": "wrangler pages secret put GEMINI_API_KEY --project-name fixturecast"
   },
   "dependencies": {
     "@aws-sdk/client-eventbridge": "^3.896.0",
@@ -43,6 +46,7 @@
     "ts-node": "^10.9.2",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "^3.90.0"
   }
 }

@@ -18,7 +18,16 @@ export async function onRequest(context) {
   }
 
   if (!env.GEMINI_API_KEY) {
-    return new Response(JSON.stringify({ error: 'Gemini not configured' }), { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } });
+    // Helpful diagnostic message so we can see at a glance why proxy failed
+    console.warn('[Gemini Proxy] Missing GEMINI_API_KEY binding in Pages env');
+    return new Response(
+      JSON.stringify({
+        error: 'Gemini not configured',
+        hint: 'Add secret via: wrangler pages secret put GEMINI_API_KEY --project-name fixturecast',
+        docs: 'Ensure GEMINI_API_KEY is set as a Pages project secret (NOT a VITE_ client var).'
+      }),
+      { status: 503, headers: { ...cors, 'Content-Type': 'application/json' } }
+    );
   }
 
   let body;

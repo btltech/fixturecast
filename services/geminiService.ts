@@ -140,8 +140,20 @@ OUTPUT FORMAT
         body: JSON.stringify({ match, context, accuracyStats })
       });
       if (!r.ok) {
-        const err = await r.text();
-        throw new Error(`Gemini proxy error (${r.status}): ${err}`);
+        let bodyText = await r.text();
+        let parsedErr: any = null;
+        try { parsedErr = JSON.parse(bodyText); } catch {}
+        const coreMsg = parsedErr?.error || bodyText;
+
+        // Special handling: Gemini not configured (missing secret on Pages env)
+        if (coreMsg && /gemini not configured/i.test(coreMsg)) {
+          if (typeof window !== 'undefined') {
+            (window as any).geminiConfigured = false;
+          }
+          throw new Error('Gemini unavailable: server secret missing. Admin must set GEMINI_API_KEY in Cloudflare Pages project.');
+        }
+
+        throw new Error(`Gemini proxy error (${r.status}): ${coreMsg}`);
       }
       return r.json();
     }, GEMINI_RETRY + 1);
