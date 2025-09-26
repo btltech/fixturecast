@@ -1388,7 +1388,9 @@ export const getRecentTeamForm = async (teamId: number): Promise<Array<'W' | 'D'
 export const getApiUsage = () => ({
   callsUsed: apiCallCount,
   callsRemaining: MAX_DAILY_CALLS - apiCallCount,
-  percentageUsed: Math.round((apiCallCount / MAX_DAILY_CALLS) * 100)
+  percentageUsed: Math.round((apiCallCount / MAX_DAILY_CALLS) * 100),
+  dailyLimit: MAX_DAILY_CALLS,
+  isConfigured: !!API_KEY
 });
 
 // Clear cache (useful for testing)

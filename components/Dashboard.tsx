@@ -90,7 +90,7 @@ const Countdown: React.FC<{ targetDate: Date }> = ({ targetDate }) => {
           ))}
         </>
       ) : (
-        <span className="text-lg sm:text-xl lg:text-2xl font-bold text-green-400 animate-pulse">⚽ Matchday is here!</span>
+        <span className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Matchday</span>
       )}
     </div>
   );
@@ -254,7 +254,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
     <div className="space-y-6 sm:space-y-8 lg:space-y-12">
       {/* Next Major Matchday - Priority #1 at the top */}
       <section className="text-center bg-gradient-to-br from-indigo-900/40 to-purple-900/40 rounded-xl p-4 sm:p-6 lg:p-10 shadow-2xl border border-indigo-500/40">
-        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-indigo-300 mb-4 sm:mb-6">⏰ Next Major Matchday In</h2>
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-indigo-300 mb-4 sm:mb-6">Next Major Matchday</h2>
         <Countdown targetDate={nextMatchday} />
       </section>
 

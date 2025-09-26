@@ -70,6 +70,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const performanceScore = performanceService.getPerformanceScore();
   const accessibilityScore = performanceService.getAccessibilityScore();
 
+  console.log('SettingsPanel isOpen:', isOpen);
   if (!isOpen) return null;
 
   return (

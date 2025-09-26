@@ -11,6 +11,21 @@ let geminiQueue: Promise<any> = Promise.resolve();
 const GEMINI_RETRY = 2;
 const GEMINI_BACKOFF_MS = 1500;
 
+// Gemini API usage tracking
+let geminiCallCount = 0;
+let geminiCallsToday = 0;
+let lastResetDate = new Date().toDateString();
+
+// Reset daily counter if it's a new day
+const resetDailyCounterIfNeeded = () => {
+  const today = new Date().toDateString();
+  if (lastResetDate !== today) {
+    geminiCallsToday = 0;
+    lastResetDate = today;
+    console.log('📊 Gemini API daily counter reset for new day');
+  }
+};
+
 if (apiKey) {
   ai = new GoogleGenAI({ apiKey });
   // Set global flag for status display
@@ -285,6 +300,9 @@ OUTPUT FORMAT
       let lastErr: any = null;
       for (let attempt = 0; attempt <= GEMINI_RETRY; attempt++) {
         try {
+          // Reset daily counter if needed
+          resetDailyCounterIfNeeded();
+          
           const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
@@ -293,6 +311,12 @@ OUTPUT FORMAT
               responseSchema: predictionSchema,
             },
           });
+          
+          // Track successful API call
+          geminiCallCount++;
+          geminiCallsToday++;
+          console.log(`✅ Gemini API call #${geminiCallCount} (${geminiCallsToday} today) - ${match.homeTeam} vs ${match.awayTeam}`);
+          
           return response;
         } catch (e: any) {
           lastErr = e;
@@ -336,10 +360,22 @@ OUTPUT FORMAT
 
     // Normalize HT/FT if present
     if (predictionData.htft) {
-      const htftTotal = Object.values(predictionData.htft).reduce((sum: number, val: any) => sum + (val || 0), 0);
+      const htftObj = predictionData.htft as any;
+      let htftTotal = 0;
+      
+      // Calculate total safely
+      Object.keys(htftObj).forEach(key => {
+        const val = htftObj[key];
+        const numVal = typeof val === 'number' ? val : (Number(val) || 0);
+        htftTotal += numVal;
+      });
+      
+      // Normalize if total > 0
       if (htftTotal > 0) {
-        Object.keys(predictionData.htft).forEach(key => {
-          predictionData.htft[key] = Math.round((predictionData.htft[key] / htftTotal) * 100);
+        Object.keys(htftObj).forEach(key => {
+          const val = htftObj[key];
+          const numVal = typeof val === 'number' ? val : (Number(val) || 0);
+          htftObj[key] = Math.round((numVal / htftTotal) * 100);
         });
       }
     }
@@ -436,5 +472,16 @@ OUTPUT FORMAT
         throw new Error("Failed to generate prediction. Please try again.");
     }
   }
+};
+
+// Get Gemini API usage statistics
+export const getGeminiApiUsage = () => {
+  resetDailyCounterIfNeeded();
+  return {
+    totalCalls: geminiCallCount,
+    callsToday: geminiCallsToday,
+    lastResetDate,
+    isConfigured: !!apiKey
+  };
 };
 
