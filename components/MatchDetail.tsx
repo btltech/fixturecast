@@ -135,22 +135,24 @@ const MatchDetail: React.FC<MatchDetailProps> = ({ onSelectTeam }) => {
                     </div>
                 </div>
             </div>
+            {prediction.goalLine && (
             <div className="bg-gray-800 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-blue-400 mb-2">Goal Line (O/U)</h3>
                  <div className="text-center">
-                    <p className="text-2xl font-bold text-white">{prediction.goalLine.line} Goals</p>
+                    <p className="text-2xl font-bold text-white">{prediction.goalLine.line || 2.5} Goals</p>
                     <div className="flex justify-around mt-2 text-sm">
                         <div>
                             <span className="text-gray-400 block">Over</span>
-                            <span className="font-bold text-lg text-white">{prediction.goalLine.overProbability}%</span>
+                            <span className="font-bold text-lg text-white">{prediction.goalLine.overProbability || 0}%</span>
                         </div>
                         <div>
                             <span className="text-gray-400 block">Under</span>
-                            <span className="font-bold text-lg text-white">{prediction.goalLine.underProbability}%</span>
+                            <span className="font-bold text-lg text-white">{prediction.goalLine.underProbability || 0}%</span>
                         </div>
                     </div>
                 </div>
             </div>
+            )}
             <div className="bg-gray-800 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-blue-400 mb-2">Both Teams To Score</h3>
                  <div className="text-center">
