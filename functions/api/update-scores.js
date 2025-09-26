@@ -381,7 +381,7 @@ async function updateOverallAccuracyStats(env) {
     // Sort predictions by timestamp (newest first) for recent performance
     allPredictions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
-    // Calculate recent performance
+    // Calculate recent performance by count
     const calculateRecentAccuracy = (count) => {
       if (allPredictions.length < count) count = allPredictions.length;
       if (count === 0) return 0;
@@ -389,6 +389,18 @@ async function updateOverallAccuracyStats(env) {
       const recent = allPredictions.slice(0, count);
       const correct = recent.filter(p => p.correct).length;
       return (correct / count) * 100;
+    };
+    
+    // Calculate performance by time period (days)
+    const calculateTimeBasedAccuracy = (days) => {
+      const cutoffDate = new Date(Date.now() - (days * 24 * 60 * 60 * 1000));
+      const recentByTime = allPredictions.filter(p => 
+        new Date(p.matchDate) > cutoffDate
+      );
+      
+      if (recentByTime.length === 0) return 0;
+      const correct = recentByTime.filter(p => p.correct).length;
+      return (correct / recentByTime.length) * 100;
     };
     
     const overallStats = {
@@ -406,11 +418,18 @@ async function updateOverallAccuracyStats(env) {
         goalLine: categories.goalLine.total > 0 ? (categories.goalLine.correct / categories.goalLine.total) * 100 : 0
       },
       
-      // Recent performance
+      // Recent performance (by count)
       recentPerformance: {
         last10: calculateRecentAccuracy(10),
         last20: calculateRecentAccuracy(20),
         last50: calculateRecentAccuracy(50)
+      },
+      
+      // Time-based performance (by days)
+      timeBasedPerformance: {
+        last7Days: calculateTimeBasedAccuracy(7),
+        last30Days: calculateTimeBasedAccuracy(30),
+        last90Days: calculateTimeBasedAccuracy(90)
       },
       
       // League breakdown
