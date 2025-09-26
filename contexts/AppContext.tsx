@@ -215,88 +215,83 @@ export const AppProvider: React.FC<{ children: ReactNode; value?: Partial<AppCon
             const knownTeams = getAllKnownTeams();
             console.log(`🔄 AppContext: Got ${Object.keys(knownTeams).length} known teams`);
             
-            // Load past predictions from static file
-            let pastPredictions: PastPrediction[] = [];
-            try {
-            const pastPredictionsRes = await fetch('./data/past-predictions.json');
-            pastPredictions = await pastPredictionsRes.json();
-            setPastPredictions(pastPredictions);
-            } catch (error) {
-                console.warn("Could not load past predictions:", error);
-            }
-
-            // Load today's predictions from generated file
-            try {
-                const currentPredictionsRes = await fetch('./predictions-data.json');
-                const currentPredictionsData = await currentPredictionsRes.json();
-                console.log('🎯 Loaded current predictions:', currentPredictionsData);
-                
-                if (currentPredictionsData.predictions && currentPredictionsData.predictions.length > 0) {
-                    const todaysPredictions: { [matchId: string]: Prediction } = {};
-                    const todaysMatches: Match[] = [];
-                    
-                    currentPredictionsData.predictions.forEach((pred: any) => {
-                        if (pred.matchId && pred.prediction) {
-                            const confidence = pred.prediction.confidence || 50;
-                            
-                            // Create prediction object
-                            todaysPredictions[pred.matchId.toString()] = {
-                                homeWinProbability: confidence,
-                                drawProbability: Math.max(0, 100 - confidence - 25),
-                                awayWinProbability: 25,
-                                predictedScoreline: pred.prediction.predictedScore || '1-1',
-                                confidence: confidence > 80 ? ConfidenceLevel.High : confidence > 60 ? ConfidenceLevel.Medium : ConfidenceLevel.Low,
-                                keyFactors: [{
-                                    category: 'AI Analysis',
-                                    points: [pred.prediction.outcome || 'Predicted outcome']
-                                }],
-                                goalLine: {
-                                    line: 2.5,
-                                    overProbability: pred.prediction.overUnder === 'Over 2.5' ? 60 : 40,
-                                    underProbability: pred.prediction.overUnder === 'Under 2.5' ? 60 : 40
-                                },
-                                btts: {
-                                    yesProbability: pred.prediction.btts === 'Yes' ? 60 : 40,
-                                    noProbability: pred.prediction.btts === 'No' ? 60 : 40
+                        // Load past predictions from static file (browser only)
+                        let pastPredictions: PastPrediction[] = [];
+                        if (typeof window !== 'undefined') {
+                            try {
+                                const pastPredictionsRes = await fetch('/data/past-predictions.json', { cache: 'no-cache' });
+                                if (pastPredictionsRes.ok) {
+                                    pastPredictions = await pastPredictionsRes.json();
+                                    setPastPredictions(pastPredictions);
+                                } else {
+                                    console.warn('Past predictions fetch non-200:', pastPredictionsRes.status);
                                 }
-                            };
-                            
-                            // Create match object for fixtures that might not be loaded
-                            const matchExists = criticalFixtures.some(fixture => fixture.id === pred.matchId.toString());
-                            if (!matchExists) {
-                                todaysMatches.push({
-                                    id: pred.matchId.toString(),
-                                    homeTeam: pred.homeTeam,
-                                    awayTeam: pred.awayTeam,
-                                    homeTeamId: pred.matchId, // Use matchId as placeholder
-                                    awayTeamId: pred.matchId + 1, // Use matchId+1 as placeholder
-                                    league: pred.league as League,
-                                    date: pred.matchDate,
-                                    venue: pred.venue || '',
-                                    status: 'NS',
-                                    homeScore: null,
-                                    awayScore: null
-                                });
+                            } catch (error) {
+                                console.warn('Could not load past predictions:', (error as any)?.message || error);
                             }
                         }
-                    });
-                    
-                    // Add today's predicted matches to fixtures
-                    const updatedFixtures = [...criticalFixtures, ...todaysMatches];
-                    
-                    setPredictionCache(todaysPredictions);
-                    addToast(`Loaded ${currentPredictionsData.predictions.length} predictions for today!`, "success");
-                    console.log('✅ Today\'s predictions loaded into cache:', todaysPredictions);
-                    
-                    // Update fixtures to include predicted matches
-                    setAppData(prev => ({ 
-                        ...prev, 
-                        fixtures: updatedFixtures 
-                    }));
-                }
-            } catch (error) {
-                console.warn("Could not load current predictions:", error);
-            }
+
+                        // Load today's predictions from generated file (browser only)
+                        if (typeof window !== 'undefined') {
+                            try {
+                                const currentPredictionsRes = await fetch('/predictions-data.json', { cache: 'no-cache' });
+                                if (!currentPredictionsRes.ok) {
+                                    console.warn('Predictions file fetch failed:', currentPredictionsRes.status);
+                                } else {
+                                    const currentPredictionsData = await currentPredictionsRes.json();
+                                    console.log('🎯 Loaded current predictions:', currentPredictionsData);
+                                    if (currentPredictionsData.predictions?.length) {
+                                        const todaysPredictions: { [matchId: string]: Prediction } = {};
+                                        const todaysMatches: Match[] = [];
+                                        for (const pred of currentPredictionsData.predictions) {
+                                            if (pred.matchId && pred.prediction) {
+                                                const confidence = pred.prediction.confidence || 50;
+                                                todaysPredictions[pred.matchId.toString()] = {
+                                                    homeWinProbability: confidence,
+                                                    drawProbability: Math.max(0, 100 - confidence - 25),
+                                                    awayWinProbability: 25,
+                                                    predictedScoreline: pred.prediction.predictedScore || '1-1',
+                                                    confidence: confidence > 80 ? ConfidenceLevel.High : confidence > 60 ? ConfidenceLevel.Medium : ConfidenceLevel.Low,
+                                                    keyFactors: [{ category: 'AI Analysis', points: [pred.prediction.outcome || 'Predicted outcome'] }],
+                                                    goalLine: {
+                                                        line: 2.5,
+                                                        overProbability: pred.prediction.overUnder === 'Over 2.5' ? 60 : 40,
+                                                        underProbability: pred.prediction.overUnder === 'Under 2.5' ? 60 : 40
+                                                    },
+                                                    btts: {
+                                                        yesProbability: pred.prediction.btts === 'Yes' ? 60 : 40,
+                                                        noProbability: pred.prediction.btts === 'No' ? 60 : 40
+                                                    }
+                                                };
+                                                const matchExists = criticalFixtures.some(fixture => fixture.id === pred.matchId.toString());
+                                                if (!matchExists) {
+                                                    todaysMatches.push({
+                                                        id: pred.matchId.toString(),
+                                                        homeTeam: pred.homeTeam,
+                                                        awayTeam: pred.awayTeam,
+                                                        homeTeamId: pred.matchId,
+                                                        awayTeamId: pred.matchId + 1,
+                                                        league: pred.league as League,
+                                                        date: pred.matchDate,
+                                                        venue: pred.venue || '',
+                                                        status: 'NS',
+                                                        homeScore: null,
+                                                        awayScore: null
+                                                    });
+                                                }
+                                            }
+                                        }
+                                        const updatedFixtures = [...criticalFixtures, ...todaysMatches];
+                                        setPredictionCache(todaysPredictions);
+                                        addToast(`Loaded ${currentPredictionsData.predictions.length} predictions for today!`, 'success');
+                                        console.log('✅ Today\'s predictions loaded into cache:', todaysPredictions);
+                                        setAppData(prev => ({ ...prev, fixtures: updatedFixtures }));
+                                    }
+                                }
+                            } catch (error) {
+                                console.warn('Could not load current predictions:', (error as any)?.message || error);
+                            }
+                        }
             
             // Set initial data
             console.log('🔄 AppContext: Setting app data with', criticalFixtures.length, 'fixtures');
