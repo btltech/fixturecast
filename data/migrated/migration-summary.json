@@ -1,0 +1,15 @@
+{
+  "migratedAt": "2025-09-26T11:06:13.160Z",
+  "totalRecords": 10,
+  "successfulMigrations": 10,
+  "errors": 0,
+  "accuracyStats": {
+    "totalPredictions": 10,
+    "correctOutcomes": 5,
+    "correctScorelines": 2,
+    "correctGoalLines": 9,
+    "outcomeAccuracy": 50,
+    "scorelineAccuracy": 20,
+    "goalLineAccuracy": 90
+  }
+}

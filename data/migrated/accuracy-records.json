@@ -1,0 +1,532 @@
+[
+  {
+    "id": "migrated-p1-1758884773158",
+    "matchId": "p1",
+    "homeTeam": "Liverpool",
+    "awayTeam": "Tottenham Hotspur",
+    "league": "Premier League",
+    "predictionDate": "2024-08-14T14:00:00.000Z",
+    "matchDate": "2024-08-14T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 60,
+      "drawProbability": 25,
+      "awayWinProbability": 15,
+      "predictedScoreline": "2-1",
+      "confidence": "High",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 70,
+        "underProbability": 30
+      }
+    },
+    "actualResult": {
+      "homeScore": 4,
+      "awayScore": 2
+    },
+    "accuracy": {
+      "outcome": true,
+      "scoreline": false,
+      "btts": false,
+      "goalLine": true,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.08166666666666668,
+      "logLoss": 0.5108256237659907,
+      "predicted": {
+        "home": 0.6,
+        "draw": 0.25,
+        "away": 0.15
+      },
+      "actualOutcome": "home",
+      "topProbability": 0.6,
+      "topMargin": 0.35
+    },
+    "verifiedAt": "2025-09-26T11:06:13.158Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.159Z"
+  },
+  {
+    "id": "migrated-p2-1758884773159",
+    "matchId": "p2",
+    "homeTeam": "Chelsea",
+    "awayTeam": "Manchester United",
+    "league": "Premier League",
+    "predictionDate": "2024-08-13T14:00:00.000Z",
+    "matchDate": "2024-08-13T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 55,
+      "drawProbability": 25,
+      "awayWinProbability": 20,
+      "predictedScoreline": "2-0",
+      "confidence": "Medium",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 60,
+        "underProbability": 40
+      }
+    },
+    "actualResult": {
+      "homeScore": 5,
+      "awayScore": 0
+    },
+    "accuracy": {
+      "outcome": true,
+      "scoreline": false,
+      "btts": false,
+      "goalLine": true,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.10166666666666664,
+      "logLoss": 0.5978370007556204,
+      "predicted": {
+        "home": 0.55,
+        "draw": 0.25,
+        "away": 0.2
+      },
+      "actualOutcome": "home",
+      "topProbability": 0.55,
+      "topMargin": 0.30000000000000004
+    },
+    "verifiedAt": "2025-09-26T11:06:13.159Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.159Z"
+  },
+  {
+    "id": "migrated-p10-1758884773159",
+    "matchId": "p10",
+    "homeTeam": "Bolton Wanderers",
+    "awayTeam": "Reading",
+    "league": "EFL League One",
+    "predictionDate": "2024-08-13T14:00:00.000Z",
+    "matchDate": "2024-08-13T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 50,
+      "drawProbability": 30,
+      "awayWinProbability": 20,
+      "predictedScoreline": "1-0",
+      "confidence": "Medium",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 40,
+        "underProbability": 60
+      }
+    },
+    "actualResult": {
+      "homeScore": 1,
+      "awayScore": 0
+    },
+    "accuracy": {
+      "outcome": true,
+      "scoreline": true,
+      "btts": false,
+      "goalLine": true,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.12666666666666668,
+      "logLoss": 0.6931471805599453,
+      "predicted": {
+        "home": 0.5,
+        "draw": 0.3,
+        "away": 0.2
+      },
+      "actualOutcome": "home",
+      "topProbability": 0.5,
+      "topMargin": 0.2
+    },
+    "verifiedAt": "2025-09-26T11:06:13.159Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.159Z"
+  },
+  {
+    "id": "migrated-p3-1758884773159",
+    "matchId": "p3",
+    "homeTeam": "Real Madrid",
+    "awayTeam": "Sevilla",
+    "league": "La Liga",
+    "predictionDate": "2024-08-12T14:00:00.000Z",
+    "matchDate": "2024-08-12T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 70,
+      "drawProbability": 20,
+      "awayWinProbability": 10,
+      "predictedScoreline": "3-0",
+      "confidence": "High",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 75,
+        "underProbability": 25
+      }
+    },
+    "actualResult": {
+      "homeScore": 2,
+      "awayScore": 2
+    },
+    "accuracy": {
+      "outcome": false,
+      "scoreline": false,
+      "btts": false,
+      "goalLine": true,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.38000000000000006,
+      "logLoss": 1.6094379124341003,
+      "predicted": {
+        "home": 0.7,
+        "draw": 0.2,
+        "away": 0.1
+      },
+      "actualOutcome": "draw",
+      "topProbability": 0.7,
+      "topMargin": 0.49999999999999994
+    },
+    "verifiedAt": "2025-09-26T11:06:13.159Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.159Z"
+  },
+  {
+    "id": "migrated-p4-fix-1758884773159",
+    "matchId": "p4-fix",
+    "homeTeam": "AS Roma",
+    "awayTeam": "Juventus",
+    "league": "Serie A",
+    "predictionDate": "2024-08-11T14:00:00.000Z",
+    "matchDate": "2024-08-11T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 30,
+      "drawProbability": 40,
+      "awayWinProbability": 30,
+      "predictedScoreline": "1-1",
+      "confidence": "Medium",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 30,
+        "underProbability": 70
+      }
+    },
+    "actualResult": {
+      "homeScore": 1,
+      "awayScore": 1
+    },
+    "accuracy": {
+      "outcome": true,
+      "scoreline": true,
+      "btts": false,
+      "goalLine": true,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.17999999999999997,
+      "logLoss": 0.916290731874155,
+      "predicted": {
+        "home": 0.3,
+        "draw": 0.4,
+        "away": 0.3
+      },
+      "actualOutcome": "draw",
+      "topProbability": 0.4,
+      "topMargin": 0.10000000000000003
+    },
+    "verifiedAt": "2025-09-26T11:06:13.159Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.159Z"
+  },
+  {
+    "id": "migrated-p5-1758884773159",
+    "matchId": "p5",
+    "homeTeam": "Bayern Munich",
+    "awayTeam": "RB Leipzig",
+    "league": "Bundesliga",
+    "predictionDate": "2024-08-06T14:00:00.000Z",
+    "matchDate": "2024-08-06T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 65,
+      "drawProbability": 20,
+      "awayWinProbability": 15,
+      "predictedScoreline": "3-1",
+      "confidence": "High",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 80,
+        "underProbability": 20
+      }
+    },
+    "actualResult": {
+      "homeScore": 2,
+      "awayScore": 1
+    },
+    "accuracy": {
+      "outcome": true,
+      "scoreline": false,
+      "btts": false,
+      "goalLine": true,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.061666666666666654,
+      "logLoss": 0.4307829160924542,
+      "predicted": {
+        "home": 0.65,
+        "draw": 0.2,
+        "away": 0.15
+      },
+      "actualOutcome": "home",
+      "topProbability": 0.65,
+      "topMargin": 0.45
+    },
+    "verifiedAt": "2025-09-26T11:06:13.159Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.159Z"
+  },
+  {
+    "id": "migrated-p6-1758884773160",
+    "matchId": "p6",
+    "homeTeam": "Borussia Dortmund",
+    "awayTeam": "Bayer Leverkusen",
+    "league": "Bundesliga",
+    "predictionDate": "2024-08-04T14:00:00.000Z",
+    "matchDate": "2024-08-04T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 45,
+      "drawProbability": 25,
+      "awayWinProbability": 30,
+      "predictedScoreline": "2-1",
+      "confidence": "Medium",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 65,
+        "underProbability": 35
+      }
+    },
+    "actualResult": {
+      "homeScore": 1,
+      "awayScore": 4
+    },
+    "accuracy": {
+      "outcome": false,
+      "scoreline": false,
+      "btts": false,
+      "goalLine": true,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.25166666666666665,
+      "logLoss": 1.2039728043259361,
+      "predicted": {
+        "home": 0.45,
+        "draw": 0.25,
+        "away": 0.3
+      },
+      "actualOutcome": "away",
+      "topProbability": 0.45,
+      "topMargin": 0.15000000000000002
+    },
+    "verifiedAt": "2025-09-26T11:06:13.160Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.160Z"
+  },
+  {
+    "id": "migrated-p7-1758884773160",
+    "matchId": "p7",
+    "homeTeam": "Barcelona",
+    "awayTeam": "Atletico Madrid",
+    "league": "La Liga",
+    "predictionDate": "2024-08-01T14:00:00.000Z",
+    "matchDate": "2024-08-01T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 25,
+      "drawProbability": 30,
+      "awayWinProbability": 45,
+      "predictedScoreline": "1-2",
+      "confidence": "Medium",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 55,
+        "underProbability": 45
+      }
+    },
+    "actualResult": {
+      "homeScore": 4,
+      "awayScore": 2
+    },
+    "accuracy": {
+      "outcome": false,
+      "scoreline": false,
+      "btts": false,
+      "goalLine": true,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.285,
+      "logLoss": 1.3862943611198906,
+      "predicted": {
+        "home": 0.25,
+        "draw": 0.3,
+        "away": 0.45
+      },
+      "actualOutcome": "home",
+      "topProbability": 0.45,
+      "topMargin": 0.15000000000000002
+    },
+    "verifiedAt": "2025-09-26T11:06:13.160Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.160Z"
+  },
+  {
+    "id": "migrated-p8-1758884773160",
+    "matchId": "p8",
+    "homeTeam": "Paris Saint-Germain",
+    "awayTeam": "AS Monaco",
+    "league": "Ligue 1",
+    "predictionDate": "2024-07-27T14:00:00.000Z",
+    "matchDate": "2024-07-27T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 80,
+      "drawProbability": 15,
+      "awayWinProbability": 5,
+      "predictedScoreline": "4-0",
+      "confidence": "High",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 90,
+        "underProbability": 10
+      }
+    },
+    "actualResult": {
+      "homeScore": 3,
+      "awayScore": 3
+    },
+    "accuracy": {
+      "outcome": false,
+      "scoreline": false,
+      "btts": false,
+      "goalLine": true,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.455,
+      "logLoss": 1.8971199848858813,
+      "predicted": {
+        "home": 0.8,
+        "draw": 0.15,
+        "away": 0.05
+      },
+      "actualOutcome": "draw",
+      "topProbability": 0.8,
+      "topMargin": 0.65
+    },
+    "verifiedAt": "2025-09-26T11:06:13.160Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.160Z"
+  },
+  {
+    "id": "migrated-p9-1758884773160",
+    "matchId": "p9",
+    "homeTeam": "Manchester United",
+    "awayTeam": "Aston Villa",
+    "league": "Premier League",
+    "predictionDate": "2024-07-22T14:00:00.000Z",
+    "matchDate": "2024-07-22T14:00:00.000Z",
+    "prediction": {
+      "homeWinProbability": 60,
+      "drawProbability": 25,
+      "awayWinProbability": 15,
+      "predictedScoreline": "2-0",
+      "confidence": "Medium",
+      "keyFactors": [],
+      "goalLine": {
+        "line": 2.5,
+        "overProbability": 50,
+        "underProbability": 50
+      }
+    },
+    "actualResult": {
+      "homeScore": 1,
+      "awayScore": 1
+    },
+    "accuracy": {
+      "outcome": false,
+      "scoreline": false,
+      "btts": false,
+      "goalLine": false,
+      "htft": false,
+      "scoreRange": false,
+      "firstGoalscorer": false,
+      "cleanSheet": false,
+      "corners": false
+    },
+    "calibration": {
+      "brierScore": 0.315,
+      "logLoss": 1.3862943611198906,
+      "predicted": {
+        "home": 0.6,
+        "draw": 0.25,
+        "away": 0.15
+      },
+      "actualOutcome": "draw",
+      "topProbability": 0.6,
+      "topMargin": 0.35
+    },
+    "verifiedAt": "2025-09-26T11:06:13.160Z",
+    "cloudVerified": false,
+    "migrated": true,
+    "migratedAt": "2025-09-26T11:06:13.160Z"
+  }
+]
