@@ -158,30 +158,90 @@ async function getMatchResult(matchId, env) {
  */
 async function updatePredictionAccuracy(predictionData, matchResult, env) {
   try {
-    // Calculate accuracy
+    // Calculate detailed accuracy metrics
     const prediction = predictionData.prediction;
-    let isCorrect = false;
     let accuracyDetails = {};
     
-    // Check outcome prediction
+    // Parse prediction text for detailed analysis
+    const predictionText = prediction.analysis || '';
     const predictedOutcome = prediction.outcome?.toLowerCase();
     const actualOutcome = matchResult.winner;
     
-    if (
+    // 1. Winner Prediction Accuracy
+    const winnerCorrect = (
       (predictedOutcome === 'home win' && actualOutcome === 'home') ||
       (predictedOutcome === 'away win' && actualOutcome === 'away') ||
       (predictedOutcome === 'draw' && actualOutcome === 'draw')
-    ) {
-      isCorrect = true;
+    );
+    
+    // 2. Scoreline Prediction (extract from text)
+    const scoreRegex = /(\d+)-(\d+)/;
+    const scoreMatch = predictionText.match(scoreRegex);
+    let scorelineCorrect = false;
+    if (scoreMatch) {
+      const [, predHome, predAway] = scoreMatch;
+      scorelineCorrect = (
+        parseInt(predHome) === matchResult.homeScore && 
+        parseInt(predAway) === matchResult.awayScore
+      );
+    }
+    
+    // 3. Both Teams to Score (BTTS)
+    const bttsRegex = /both teams.*score.*yes|btts.*yes|both.*score/i;
+    const noBttsRegex = /both teams.*score.*no|btts.*no|clean sheet/i;
+    let bttsPredicted = null;
+    let bttsCorrect = false;
+    
+    if (bttsRegex.test(predictionText)) {
+      bttsPredicted = true;
+    } else if (noBttsRegex.test(predictionText)) {
+      bttsPredicted = false;
+    }
+    
+    if (bttsPredicted !== null) {
+      const actualBtts = matchResult.homeScore > 0 && matchResult.awayScore > 0;
+      bttsCorrect = bttsPredicted === actualBtts;
+    }
+    
+    // 4. Goal Line Predictions (Over/Under)
+    const overRegex = /over (\d+\.?\d*)|(\d+\.?\d*)\+ goals/i;
+    const underRegex = /under (\d+\.?\d*)|below (\d+\.?\d*)/i;
+    let goalLinePredicted = null;
+    let goalLineCorrect = false;
+    
+    const overMatch = predictionText.match(overRegex);
+    const underMatch = predictionText.match(underRegex);
+    const totalGoals = matchResult.homeScore + matchResult.awayScore;
+    
+    if (overMatch) {
+      const line = parseFloat(overMatch[1] || overMatch[2]);
+      goalLinePredicted = `Over ${line}`;
+      goalLineCorrect = totalGoals > line;
+    } else if (underMatch) {
+      const line = parseFloat(underMatch[1] || underMatch[2]);
+      goalLinePredicted = `Under ${line}`;
+      goalLineCorrect = totalGoals < line;
     }
     
     accuracyDetails = {
+      // Basic outcome
       predicted: predictedOutcome,
       actual: actualOutcome,
-      correct: isCorrect,
+      correct: winnerCorrect,
       confidence: prediction.confidence || 0,
       homeScore: matchResult.homeScore,
-      awayScore: matchResult.awayScore
+      awayScore: matchResult.awayScore,
+      
+      // Detailed categories
+      categories: {
+        winner: { predicted: predictedOutcome, correct: winnerCorrect },
+        scoreline: { 
+          predicted: scoreMatch ? `${scoreMatch[1]}-${scoreMatch[2]}` : null, 
+          correct: scorelineCorrect 
+        },
+        btts: { predicted: bttsPredicted, correct: bttsCorrect },
+        goalLine: { predicted: goalLinePredicted, correct: goalLineCorrect }
+      }
     };
     
     // Store accuracy result
@@ -237,17 +297,64 @@ async function updateOverallAccuracyStats(env) {
     const leagueStats = {};
     const dailyStats = {};
     
+    // Category tracking
+    const categories = {
+      winner: { total: 0, correct: 0 },
+      scoreline: { total: 0, correct: 0 },
+      btts: { total: 0, correct: 0 },
+      goalLine: { total: 0, correct: 0 }
+    };
+    
+    // Recent performance tracking
+    const allPredictions = [];
+    
     for (const key of keys) {
       const accuracyData = await env.PREDICTIONS_KV.get(key.name);
       if (accuracyData) {
         const data = JSON.parse(accuracyData);
         totalPredictions++;
         
+        // Store for recent performance calculation
+        allPredictions.push({
+          correct: data.accuracy.correct,
+          timestamp: data.timestamp,
+          categories: data.accuracy.categories
+        });
+        
         if (data.accuracy.correct) {
           correctPredictions++;
         }
         
         totalConfidence += data.accuracy.confidence || 0;
+        
+        // Category accuracy tracking
+        if (data.accuracy.categories) {
+          const cats = data.accuracy.categories;
+          
+          // Winner predictions
+          if (cats.winner?.predicted) {
+            categories.winner.total++;
+            if (cats.winner.correct) categories.winner.correct++;
+          }
+          
+          // Scoreline predictions  
+          if (cats.scoreline?.predicted) {
+            categories.scoreline.total++;
+            if (cats.scoreline.correct) categories.scoreline.correct++;
+          }
+          
+          // BTTS predictions
+          if (cats.btts?.predicted !== null) {
+            categories.btts.total++;
+            if (cats.btts.correct) categories.btts.correct++;
+          }
+          
+          // Goal line predictions
+          if (cats.goalLine?.predicted) {
+            categories.goalLine.total++;
+            if (cats.goalLine.correct) categories.goalLine.correct++;
+          }
+        }
         
         // League stats
         const league = data.league;
@@ -271,18 +378,57 @@ async function updateOverallAccuracyStats(env) {
       }
     }
     
+    // Sort predictions by timestamp (newest first) for recent performance
+    allPredictions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // Calculate recent performance
+    const calculateRecentAccuracy = (count) => {
+      if (allPredictions.length < count) count = allPredictions.length;
+      if (count === 0) return 0;
+      
+      const recent = allPredictions.slice(0, count);
+      const correct = recent.filter(p => p.correct).length;
+      return (correct / count) * 100;
+    };
+    
     const overallStats = {
+      // Basic stats
       totalPredictions,
       correctPredictions,
       accuracy: totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0,
       averageConfidence: totalPredictions > 0 ? totalConfidence / totalPredictions : 0,
+      
+      // Category accuracy
+      categoryAccuracy: {
+        winner: categories.winner.total > 0 ? (categories.winner.correct / categories.winner.total) * 100 : 0,
+        scoreline: categories.scoreline.total > 0 ? (categories.scoreline.correct / categories.scoreline.total) * 100 : 0,
+        btts: categories.btts.total > 0 ? (categories.btts.correct / categories.btts.total) * 100 : 0,
+        goalLine: categories.goalLine.total > 0 ? (categories.goalLine.correct / categories.goalLine.total) * 100 : 0
+      },
+      
+      // Recent performance
+      recentPerformance: {
+        last10: calculateRecentAccuracy(10),
+        last20: calculateRecentAccuracy(20),
+        last50: calculateRecentAccuracy(50)
+      },
+      
+      // League breakdown
       leagueStats: Object.entries(leagueStats).map(([league, stats]) => ({
         league,
         accuracy: (stats.correct / stats.total) * 100,
         total: stats.total,
         correct: stats.correct
       })),
-      lastUpdated: new Date().toISOString()
+      
+      // Metadata
+      lastUpdated: new Date().toISOString(),
+      totalCategories: {
+        winner: categories.winner.total,
+        scoreline: categories.scoreline.total,
+        btts: categories.btts.total,
+        goalLine: categories.goalLine.total
+      }
     };
     
     await env.PREDICTIONS_KV.put('overall_accuracy_stats', JSON.stringify(overallStats));

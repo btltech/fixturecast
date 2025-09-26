@@ -2,11 +2,11 @@ name = "fixturecast-cron-worker"
 main = "worker.js"
 compatibility_date = "2024-01-15"
 
-# Cron Triggers
+# Cron Triggers (UK-friendly times)
 [triggers]
 crons = [
-  "0 */6 * * *",    # Every 6 hours - Generate predictions
-  "15 * * * *"      # Every hour at 15 minutes past - Update scores
+  "0 6,12,18,23 * * *",  # 07:00, 13:00, 19:00, 00:00 London time (BST)
+  "15 * * * *"           # Every hour at 15 minutes past - Update scores
 ]
 
 # Environment Variables
