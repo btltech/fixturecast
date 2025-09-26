@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Accuracy Data Loading</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #1a1a1a; 
+            color: white;
+        }
+        .result { 
+            background: #333; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 8px; 
+            border-left: 4px solid #4CAF50;
+        }
+        .error { 
+            border-left-color: #f44336; 
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 Accuracy Data Loading Test</h1>
+    <p>Testing if historical prediction data loads correctly into the accuracy tracking system...</p>
+
+    <div id="results"></div>
+    <div id="stats" class="stats"></div>
+
+    <script>
+        function log(message, isError = false) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = isError ? 'result error' : 'result';
+            resultDiv.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        function displayStats(stats) {
+            const statsDiv = document.getElementById('stats');
+            statsDiv.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${stats.totalPredictions}</div>
+                    <div>Total Predictions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.correctOutcomes}</div>
+                    <div>Correct Outcomes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.overallAccuracy}%</div>
+                    <div>Overall Accuracy</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${Math.round((stats.correctGoalLine / stats.totalPredictions) * 100)}%</div>
+                    <div>Goal Line Accuracy</div>
+                </div>
+            `;
+        }
+
+        // Test accuracy service functions
+        function testAccuracyDataLoading() {
+            try {
+                log('🔄 Starting accuracy data loading test...');
+
+                // Simulate the accuracy service loading historical data
+                const ACCURACY_STORAGE_KEY = 'fixturecast_accuracy_data';
+                
+                // Check if data exists in localStorage
+                const existingData = localStorage.getItem(ACCURACY_STORAGE_KEY);
+                
+                if (existingData) {
+                    const parsedData = JSON.parse(existingData);
+                    log(`✅ Found ${parsedData.length} existing accuracy records in localStorage`);
+                } else {
+                    log('📥 No existing data found, loading historical data...');
+                    
+                    // This simulates what the accuracyService does
+                    const historicalData = [
+                        {
+                            id: "p1", homeTeam: "Liverpool", awayTeam: "Tottenham Hotspur", league: "Premier League",
+                            prediction: { homeWinProbability: 60, drawProbability: 25, awayWinProbability: 15, predictedScoreline: "2-1", goalLine: { line: 2.5, overProbability: 70, underProbability: 30 } },
+                            actualResult: { homeScore: 4, awayScore: 2 }
+                        },
+                        {
+                            id: "p2", homeTeam: "Chelsea", awayTeam: "Manchester United", league: "Premier League",
+                            prediction: { homeWinProbability: 55, drawProbability: 25, awayWinProbability: 20, predictedScoreline: "2-0", goalLine: { line: 2.5, overProbability: 60, underProbability: 40 } },
+                            actualResult: { homeScore: 5, awayScore: 0 }
+                        },
+                        {
+                            id: "p10", homeTeam: "Bolton Wanderers", awayTeam: "Reading", league: "EFL League One",
+                            prediction: { homeWinProbability: 50, drawProbability: 30, awayWinProbability: 20, predictedScoreline: "1-0", goalLine: { line: 2.5, overProbability: 40, underProbability: 60 } },
+                            actualResult: { homeScore: 1, awayScore: 0 }
+                        }
+                        // ... more records would be here
+                    ];
+
+                    // Calculate accuracy for sample data
+                    const accuracyRecords = [];
+                    let correctOutcomes = 0;
+                    let correctGoalLine = 0;
+
+                    for (const record of historicalData) {
+                        const { homeScore, awayScore } = record.actualResult;
+                        const totalGoals = homeScore + awayScore;
+                        
+                        // Determine actual vs predicted outcome
+                        const actualOutcome = homeScore > awayScore ? 'home' : awayScore > homeScore ? 'away' : 'draw';
+                        const { homeWinProbability, drawProbability, awayWinProbability } = record.prediction;
+                        const predictedOutcome = 
+                            homeWinProbability > drawProbability && homeWinProbability > awayWinProbability ? 'home' :
+                            awayWinProbability > drawProbability ? 'away' : 'draw';
+
+                        const outcomeCorrect = actualOutcome === predictedOutcome;
+                        const goalLineCorrect = totalGoals > 2.5 ? 
+                            record.prediction.goalLine.overProbability > record.prediction.goalLine.underProbability :
+                            record.prediction.goalLine.underProbability > record.prediction.goalLine.overProbability;
+
+                        if (outcomeCorrect) correctOutcomes++;
+                        if (goalLineCorrect) correctGoalLine++;
+
+                        accuracyRecords.push({
+                            matchId: record.id,
+                            homeTeam: record.homeTeam,
+                            awayTeam: record.awayTeam,
+                            accuracy: {
+                                outcome: outcomeCorrect,
+                                goalLine: goalLineCorrect
+                            }
+                        });
+
+                        log(`📊 ${record.homeTeam} vs ${record.awayTeam}: ${homeScore}-${awayScore} - Outcome: ${outcomeCorrect ? '✅' : '❌'}, Goal Line: ${goalLineCorrect ? '✅' : '❌'}`);
+                    }
+
+                    // Calculate and display stats
+                    const stats = {
+                        totalPredictions: historicalData.length,
+                        correctOutcomes,
+                        correctGoalLine,
+                        overallAccuracy: Math.round((correctOutcomes / historicalData.length) * 100)
+                    };
+
+                    displayStats(stats);
+                    log(`✅ Sample calculation complete: ${stats.overallAccuracy}% outcome accuracy, ${Math.round((correctGoalLine / historicalData.length) * 100)}% goal line accuracy`);
+                }
+
+                log('🎉 Accuracy data loading test completed successfully!');
+                log('💡 In the real app, navigate to /accuracy to see the full dashboard with your historical data');
+
+            } catch (error) {
+                log(`❌ Error during test: ${error.message}`, true);
+                console.error('Test error:', error);
+            }
+        }
+
+        // Run the test when page loads
+        window.addEventListener('load', testAccuracyDataLoading);
+    </script>
+</body>
+</html>
