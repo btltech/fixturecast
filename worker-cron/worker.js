@@ -41,7 +41,8 @@ export default {
       // Support both cron patterns: explicit hours (wrangler.toml) and generic every 6 hours
       if (event.cron === '0 */6 * * *' || event.cron === '0 6,12,18,23 * * *') {
         // Every 6 hours: Generate predictions
-        const result = await triggerPredictionUpdate(env);
+        const featuredOnly = env.FEATURED_ONLY_FETCH === 'true';
+        const result = await triggerPredictionUpdate(env, false, featuredOnly);
         globalThis.lastCronExecution.result = result;
         globalThis.lastCronExecution.type = 'predictions';
       } else if (event.cron === '15 * * * *') {
@@ -178,7 +179,8 @@ export default {
     if (url.pathname === '/trigger-predictions') {
       try {
         const force = url.searchParams.get('force') === 'true';
-        const result = await triggerPredictionUpdate(env, force);
+        const featuredOnly = url.searchParams.get('featuredOnly') === 'true' || env.FEATURED_ONLY_FETCH === 'true';
+        const result = await triggerPredictionUpdate(env, force, featuredOnly);
         return new Response(JSON.stringify(result), { 
           status: 200,
           headers: { 'Content-Type': 'application/json', ...cors }
@@ -292,30 +294,72 @@ const FEATURED_LEAGUE_IDS = new Set([
 ]);
 
 /**
+ * Fetch fixtures only for featured leagues by iterating league IDs.
+ * This reduces payload size and API noise when we only care about featured.
+ * NOTE: Sequential with small concurrency to avoid rate limiting.
+ */
+async function fetchFeaturedLeagueFixtures(dateStr, env) {
+  const leagueIds = Array.from(FEATURED_LEAGUE_IDS);
+  const results = [];
+  const MAX_CONCURRENT = 5;
+  for (let i = 0; i < leagueIds.length; i += MAX_CONCURRENT) {
+    const batch = leagueIds.slice(i, i + MAX_CONCURRENT);
+    const batchResults = await Promise.all(batch.map(async (lid) => {
+      try {
+        const resp = await fetch(`https://v3.football.api-sports.io/fixtures?date=${dateStr}&league=${lid}`, {
+          method: 'GET',
+          headers: {
+            'x-rapidapi-key': env.FOOTBALL_API_KEY,
+            'x-rapidapi-host': 'v3.football.api-sports.io'
+          }
+        });
+        if (!resp.ok) {
+          console.warn('Featured league fetch failed', lid, resp.status);
+          return [];
+        }
+        const json = await resp.json();
+        return json.response || [];
+      } catch (e) {
+        console.warn('Error fetching league', lid, e.message);
+        return [];
+      }
+    }));
+    for (const arr of batchResults) results.push(...arr);
+  }
+  console.log(`📦 Featured-only aggregate fetched ${results.length} fixtures across ${leagueIds.length} leagues`);
+  return results;
+}
+
+/**
  * Trigger prediction generation directly in Worker
  */
-async function triggerPredictionUpdate(env, force = false) {
+async function triggerPredictionUpdate(env, force = false, featuredOnly = false) {
   console.log('🤖 Triggering prediction update...');
   
   try {
     // Get today's matches from Football API
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-    const footballResponse = await fetch(`https://v3.football.api-sports.io/fixtures?date=${today}`, {
-      method: 'GET',
-      headers: {
-        'x-rapidapi-key': env.FOOTBALL_API_KEY,
-        'x-rapidapi-host': 'v3.football.api-sports.io'
+    let allMatches = [];
+    if (featuredOnly) {
+      console.log('🎯 Featured-only fetch enabled (param or env). Fetching per league...');
+      allMatches = await fetchFeaturedLeagueFixtures(today, env);
+    } else {
+      const footballResponse = await fetch(`https://v3.football.api-sports.io/fixtures?date=${today}`, {
+        method: 'GET',
+        headers: {
+          'x-rapidapi-key': env.FOOTBALL_API_KEY,
+          'x-rapidapi-host': 'v3.football.api-sports.io'
+        }
+      });
+      if (!footballResponse.ok) {
+        throw new Error(`Football API error: ${footballResponse.status}`);
       }
-    });
-    
-    if (!footballResponse.ok) {
-      throw new Error(`Football API error: ${footballResponse.status}`);
+      const footballData = await footballResponse.json();
+      console.log(`📅 Found ${footballData.response?.length || 0} matches for today (global fetch)`);
+      allMatches = footballData.response || [];
     }
     
-    const footballData = await footballResponse.json();
-    console.log(`📅 Found ${footballData.response?.length || 0} matches for today`);
-    
-    if (!footballData.response || footballData.response.length === 0) {
+    if (!allMatches || allMatches.length === 0) {
       console.log('📅 No matches found for today');
       return { message: 'No matches found for today', processedPredictions: 0 };
     }
@@ -335,8 +379,7 @@ async function triggerPredictionUpdate(env, force = false) {
     }
 
     // Partition: total matches vs featured matches
-    const allMatches = footballData.response; // full set from API (global)
-    const totalMatches = allMatches.length;
+    const totalMatches = allMatches.length; // total fetched (may already be only featured if featuredOnly)
     const featuredMatches = allMatches.filter(m => {
       try {
         return m?.league?.id && FEATURED_LEAGUE_IDS.has(m.league.id);
@@ -345,7 +388,7 @@ async function triggerPredictionUpdate(env, force = false) {
 
     const matchesToPredict = featuredMatches.length > 0 ? featuredMatches : allMatches.slice(0, 25); // fallback safeguard
     const featuredCount = featuredMatches.length;
-    console.log(`🎯 Filtering global fixtures -> featured: ${featuredCount}/${totalMatches} (using ${matchesToPredict.length})`);
+    console.log(`🎯 Featured filter summary: featured=${featuredCount} totalFetched=${totalMatches} using=${matchesToPredict.length} mode=${featuredOnly ? 'featured-only-fetch' : 'global-fetch-filter'}`);
     const predictions = [];
     const failures = [];
 
@@ -437,11 +480,12 @@ async function triggerPredictionUpdate(env, force = false) {
         await env.PREDICTIONS_KV.put(dayKey, JSON.stringify({
           date: dataVersion,
           generatedAt: new Date().toISOString(),
-            totalMatches,
+      totalMatches,
             featuredMatches: featuredCount,
             processed: predictions.length,
             failures: failures.length,
             usingFallbackAllMatches: featuredCount === 0,
+      fetchMode: featuredOnly ? 'featured-only' : 'global',
             model: modelVersion,
             predictions
         }));
@@ -463,6 +507,7 @@ async function triggerPredictionUpdate(env, force = false) {
       totalMatches,
       featuredMatches: featuredCount,
       usingFallbackAllMatches: featuredCount === 0,
+      fetchMode: featuredOnly ? 'featured-only' : 'global',
       failures,
       persisted: !!env.PREDICTIONS_KV,
       predictions
