@@ -492,3 +492,4 @@ export class AdvancedPredictionSyncService {
 
 // Export singleton instance
 export const advancedPredictionSyncService = AdvancedPredictionSyncService.getInstance();
+

@@ -73,3 +73,4 @@ export const usePredictionSync = (): UsePredictionSyncReturn => {
     clearErrors
   };
 };
+

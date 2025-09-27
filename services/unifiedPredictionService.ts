@@ -236,3 +236,37 @@ export const getMatchPrediction = async (
   
   return prediction;
 };
+
+/**
+ * Retry incomplete predictions for a list of matches, with delay between each call
+ * @param matches Array of Match objects
+ * @param isPredictionComplete Function to check if prediction is complete for a match
+ * @param context Optional PredictionContext
+ * @param model PredictionModel to use
+ * @param delayMs Delay in milliseconds between each retry (default: 60000)
+ */
+export const retryIncompletePredictions = async (
+  matches: Match[],
+  isPredictionComplete: (match: Match) => boolean,
+  context?: PredictionContext,
+  model: PredictionModel = 'gemini',
+  delayMs: number = 60000
+) => {
+  for (const match of matches) {
+    if (isPredictionComplete(match)) {
+      console.log(`✅ Prediction already complete for ${match.homeTeam} vs ${match.awayTeam}`);
+      continue;
+    }
+    console.log(`🔄 Retrying prediction for ${match.homeTeam} vs ${match.awayTeam}...`);
+    try {
+      await getMatchPrediction(match, context, undefined, model);
+      console.log(`🎯 Prediction retried for ${match.homeTeam} vs ${match.awayTeam}`);
+    } catch (err) {
+      console.error(`❌ Failed to retry prediction for ${match.homeTeam} vs ${match.awayTeam}:`, err);
+    }
+    // Wait before next call
+    if (delayMs > 0) {
+      await new Promise(res => setTimeout(res, delayMs));
+    }
+  }
+};

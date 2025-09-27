@@ -132,3 +132,4 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
 };
 
 export default SyncStatusIndicator;
+

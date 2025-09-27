@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Match, Prediction, League } from '../types';
@@ -737,7 +736,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         )}
       </section>
 
-      
+      {/* Add Regenerate All Predictions Button */}
+      <div className="mt-8 text-center">
+        <button
+          onClick={() => {
+            if (window.confirm('Are you sure you want to regenerate all predictions?')) {
+              fetch('/api/regenerate-predictions', { method: 'POST' })
+                .then(response => {
+                  if (response.ok) {
+                    alert('All predictions are being regenerated.');
+                  } else {
+                    alert('Failed to regenerate predictions.');
+                  }
+                })
+                .catch(() => alert('An error occurred while regenerating predictions.'));
+            }
+          }}
+          className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-200"
+        >
+          Regenerate All Predictions
+        </button>
+      </div>
+
       {/* Navigation handled via onSelectTeam; modal removed */}
     </div>
   );

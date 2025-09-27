@@ -349,6 +349,63 @@ export default {
       }
     }
 
+    // Lightweight health + state inspection for prediction pipeline
+    if (url.pathname === '/prediction-health') {
+      const headers = { 'Content-Type': 'application/json', ...cors };
+      const date = url.searchParams.get('date') || new Date().toISOString().slice(0,10);
+      const out = { date };
+      if (!env.PREDICTIONS_KV) {
+        return new Response(JSON.stringify({ ...out, error: 'kv-unavailable' }), { status: 500, headers });
+      }
+      try {
+        const [progressRaw, aggRaw, cronRaw] = await Promise.all([
+          env.PREDICTIONS_KV.get(`daily:${date}:progress`),
+          env.PREDICTIONS_KV.get(`daily:${date}:predictions`),
+          env.PREDICTIONS_KV.get('cron:lastExecution')
+        ]);
+        let progress = null; let aggregate = null; let cron = null;
+        try { if (progressRaw) progress = JSON.parse(progressRaw); } catch {}
+        try { if (aggRaw) aggregate = JSON.parse(aggRaw); } catch {}
+        try { if (cronRaw) cron = JSON.parse(cronRaw); } catch {}
+        // Derive status heuristics
+        let status = 'idle';
+        if (progress && !progress.done && (progress.predicted||0) > 0) status = 'running';
+        if (progress && progress.done) status = 'completed';
+        if (progress && (progress.predicted||0) === 0 && (progress.failures||0) > 0 && !progress.done) status = 'stalled';
+        if (!progress && aggregate && aggregate.processed > 0) status = 'completed';
+        // Key presence
+        const keys = {
+          football: !!env.FOOTBALL_API_KEY,
+          gemini: !!env.GEMINI_API_KEY,
+          deepseek: !!env.DEEPSEEK_API_KEY
+        };
+        const model = aggregate?.model || 'unknown';
+        // Rate pressure indicator
+        const ratePressure = progress?.consecutiveRateLimit && progress.consecutiveRateLimit > 0 ? progress.consecutiveRateLimit : 0;
+        return new Response(JSON.stringify({
+          date,
+            status,
+          model,
+          keys,
+          progress,
+          aggregateSummary: aggregate ? {
+            processed: aggregate.processed,
+            failures: aggregate.failures,
+            waveSizeApplied: aggregate.waveSizeApplied,
+            remainingAfterWave: aggregate.remainingAfterWave,
+            fetchMode: aggregate.fetchMode,
+            resume: aggregate.resume,
+            generatedAt: aggregate.generatedAt
+          } : null,
+          ratePressure,
+          cron,
+          suggestions: suggestPredictionHints({ progress, aggregate, keys })
+        }), { headers });
+      } catch (e) {
+        return new Response(JSON.stringify({ ...out, error: 'health-failed', message: e.message }), { status: 500, headers });
+      }
+    }
+
     // Historical accuracy backfill: /backfill-accuracy?date=YYYY-MM-DD OR ?start=YYYY-MM-DD&end=YYYY-MM-DD OR ?days=7
     if (url.pathname === '/backfill-accuracy') {
       const headers = { 'Content-Type': 'application/json', ...cors };
@@ -499,6 +556,7 @@ Available endpoints:
 - /test-env (check environment variables)
 - /cron-status (check last cron execution and next triggers)
  - /cron-history (recent cron executions)
+ - /prediction-health (lightweight pipeline diagnostics)
  - /fixtures-debug (diagnose fixture availability; params: date, details=true, league=<id>)
  - /backfill-accuracy (recompute historical accuracy; params: date= | start=&end= | days=N [&force=true])
 
@@ -617,7 +675,8 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
         console.warn('Daily aggregate read failed (continuing):', e.message);
       }
     }
-    if (existingDailyObj && !force && !resume) {
+    // Always merge new predictions with existing, even on force
+    if (existingDailyObj && !resume && !force) {
       console.log('⏭️  Skipping prediction generation (daily aggregate exists and no force/resume).');
       return { skipped: true, reason: 'already-generated', date: todayStr, existingProcessed: existingDailyObj.processed };
     }
@@ -816,10 +875,11 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
         const dayKey = `daily:${dataVersion}:predictions`; 
         let finalPredictionsList = predictions;
         let baseObj = existingDailyObj || {};
-        if (resume && existingDailyObj && Array.isArray(existingDailyObj.predictions)) {
+        // Always merge new predictions with existing aggregate
+        if (existingDailyObj && Array.isArray(existingDailyObj.predictions)) {
           const merged = new Map();
-            for (const oldP of existingDailyObj.predictions) merged.set(oldP.matchId, oldP);
-            for (const newP of predictions) merged.set(newP.matchId, newP);
+          for (const oldP of existingDailyObj.predictions) merged.set(oldP.matchId, oldP);
+          for (const newP of predictions) merged.set(newP.matchId, newP);
           finalPredictionsList = Array.from(merged.values());
         }
         // If no new predictions were generated in this wave AND we had existing ones, avoid overwriting with empty
@@ -945,16 +1005,92 @@ Focus on tactical analysis, recent form, and key factors.`;
   }
 }
 
+// DeepSeek prediction (OpenAI-compatible chat completions style)
+async function generatePredictionDeepSeek(match, env, model = 'deepseek-chat') {
+  if (!env.DEEPSEEK_API_KEY) {
+    throw new Error('DeepSeek API key not configured');
+  }
+  const prompt = `You are an AI football match predictor.
+Return a concise analysis and clear structured prediction lines.
+
+Match: ${match.teams.home.name} vs ${match.teams.away.name}
+League: ${match.league.name}
+Date: ${match.fixture.date}
+Venue: ${match.fixture.venue?.name || 'Unknown'}
+
+Provide (single line labels):
+Outcome: (Home Win/Draw/Away Win)
+Confidence: (0-100%)
+Predicted Score: (e.g. 2-1)
+BTTS: (Yes/No)
+Over/Under 2.5: (Over 2.5 / Under 2.5)
+Key Factors: short comma separated.
+`; 
+  try {
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${env.DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a helpful football prediction assistant.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 400,
+        temperature: 0.8
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`DeepSeek API error: ${response.status}`);
+    }
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    // Simple parsing heuristics
+    const line = (label) => (content.match(new RegExp(label + '\\s*:?\\s*(.*)', 'i')) || [])[1] || '';
+    const outcomeRaw = line('Outcome').trim();
+    const confidenceRaw = line('Confidence').replace(/[^0-9]/g,'');
+    const predictedScore = line('Predicted Score').trim() || '1-1';
+    const btts = (/yes/i.test(line('BTTS')) ? 'Yes' : /no/i.test(line('BTTS')) ? 'No' : (Math.random()>0.5?'Yes':'No'));
+    const overUnder = /over/i.test(line('Over\/Under 2.5')) ? 'Over 2.5' : /under/i.test(line('Over\/Under 2.5')) ? 'Under 2.5' : (Math.random()>0.5?'Over 2.5':'Under 2.5');
+    const confidence = confidenceRaw ? Math.min(100, Math.max(0, parseInt(confidenceRaw,10))) : (60 + Math.floor(Math.random()*25));
+    const normalizedOutcome = /home/i.test(outcomeRaw) ? 'Home Win' : /away/i.test(outcomeRaw) ? 'Away Win' : /draw/i.test(outcomeRaw) ? 'Draw' : ['Home Win','Draw','Away Win'][Math.floor(Math.random()*3)];
+    return {
+      analysis: content.slice(0, 1800),
+      outcome: normalizedOutcome,
+      confidence,
+      predictedScore,
+      btts,
+      overUnder,
+      model,
+      generatedAt: new Date().toISOString(),
+      usedDeepSeek: true
+    };
+  } catch (e) {
+    console.error('DeepSeek prediction error:', e);
+    throw e;
+  }
+}
+
 // Wrapper with retry & exponential backoff for Gemini calls
 async function generatePredictionWithRetry(match, env, { maxAttempts = 5, baseDelayMs = 300, preferredModel = null } = {}) {
   let attempt = 0;
   let lastErr;
   const primaryModel = preferredModel || 'gemini-2.5-flash';
-  const fallbackModel = primaryModel === 'gemini-2.5-flash' ? 'gemini-1.5-flash' : 'gemini-2.5-flash';
+  const isPrimaryDeepSeek = /^deepseek/i.test(primaryModel);
+  const fallbackGemini = primaryModel === 'gemini-2.5-flash' ? 'gemini-1.5-flash' : 'gemini-2.5-flash';
+  const deepSeekModel = 'deepseek-chat';
   while (attempt < maxAttempts) {
     attempt++;
     try {
-      const prediction = await generatePrediction(match, env, primaryModel);
+      let prediction;
+      if (isPrimaryDeepSeek) {
+        prediction = await generatePredictionDeepSeek(match, env, primaryModel);
+      } else {
+        prediction = await generatePrediction(match, env, primaryModel);
+      }
       return { prediction, attempts: attempt, modelUsed: primaryModel };
     } catch (e) {
       lastErr = e;
@@ -962,16 +1098,28 @@ async function generatePredictionWithRetry(match, env, { maxAttempts = 5, baseDe
       const retriable = msg.includes('429') || msg.includes('rate') || msg.includes('subrequest');
       if (!retriable || attempt === maxAttempts) {
         if (retriable && attempt === maxAttempts) {
-          // Attempt single fallback model call (no retries on fallback)
-          try {
-            console.log(`🔁 Fallback model attempt using ${fallbackModel}`);
-            const fallbackPred = await generatePrediction(match, env, fallbackModel);
-            return { prediction: fallbackPred, attempts: attempt, modelUsed: fallbackModel, usedFallback: true };
-          } catch (fallbackErr) {
-            throw fallbackErr; // surface fallback error
+          // Tier 1 fallback: alternate Gemini (if primary not deepseek)
+          if (!isPrimaryDeepSeek) {
+            try {
+              console.log(`🔁 Fallback Gemini model attempt using ${fallbackGemini}`);
+              const fb = await generatePrediction(match, env, fallbackGemini);
+              return { prediction: fb, attempts: attempt, modelUsed: fallbackGemini, usedFallback: true };
+            } catch (gfbErr) {
+              lastErr = gfbErr;
+            }
+          }
+          // Tier 2 fallback: DeepSeek (if key configured and not already primary)
+          if (env.DEEPSEEK_API_KEY) {
+            try {
+              console.log('🛟 DeepSeek fallback attempt');
+              const ds = await generatePredictionDeepSeek(match, env, deepSeekModel);
+              return { prediction: ds, attempts: attempt, modelUsed: deepSeekModel, usedFallback: true, deepSeekTier: true };
+            } catch (dsErr) {
+              lastErr = dsErr;
+            }
           }
         }
-        throw e;
+        throw lastErr || e;
       }
       const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 150);
       console.log(`⏳ Retry ${attempt}/${maxAttempts} after ${delay}ms (reason: ${e.message})`);
@@ -1340,6 +1488,20 @@ function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
 // Update progress key
 async function updateDailyProgress(kv, date, progress) {
   try { await kv.put(`daily:${date}:progress`, JSON.stringify(progress)); } catch (e) { console.warn('Progress KV put failed:', e.message); }
+}
+// Provide dynamic hints based on pipeline state
+function suggestPredictionHints(ctx) {
+  const hints = [];
+  const { progress, aggregate, keys } = ctx || {};
+  if (!keys?.football) hints.push('Missing FOOTBALL_API_KEY – fixtures fetch will fail');
+  if (!keys?.gemini && !keys?.deepseek) hints.push('No model keys available – predictions cannot be generated');
+  if (progress && progress.consecutiveRateLimit >= 3) hints.push('High rate limit pressure – consider increasing delay or reducing wave size');
+  if (progress && progress.dynamicConcurrency === 1 && progress.consecutiveRateLimit === 0 && !progress.done) hints.push('Safe to manually scale concurrency by re-running without force to continue');
+  if (aggregate && aggregate.processed === 0 && aggregate.failures > 0) hints.push('All attempts failed – verify model quotas or pause and retry later');
+  if (progress && !progress.done && (progress.remaining||0) > 0) hints.push('Use resume=true to continue remaining predictions');
+  if (!progress && !aggregate) hints.push('No progress or aggregate for date – run /trigger-predictions?force=true');
+  if (aggregate && aggregate.remainingAfterWave > 0) hints.push('Remaining after wave – invoke /trigger-predictions?resume=true to continue');
+  return hints.slice(0,8);
 }
 // Fetch fixtures helper for endpoints (featured or global)
 async function fetchFixturesForDate(dateStr, env, featuredOnly) {

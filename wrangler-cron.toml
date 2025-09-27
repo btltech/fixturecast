@@ -1,0 +1,23 @@
+# Dedicated Wrangler config for the cron prediction Worker
+# Deploy with: npx wrangler deploy --config wrangler-cron.toml
+# Ensure KV namespace ID matches your production binding.
+
+name = "fixturecast-cron-worker"
+main = "worker-cron/worker.js"
+compatibility_date = "2024-01-15"
+
+# Scheduled triggers (matches logic in worker)
+[triggers]
+crons = ["0 6,12,18,23 * * *", "15 * * * *"]
+
+# KV binding (reuse existing namespace)
+[[kv_namespaces]]
+binding = "PREDICTIONS_KV"
+id = "f00e18bfc6a44f3d876bd4448003e1f5"
+# preview_id can mirror for simplicity
+preview_id = "f00e18bfc6a44f3d876bd4448003e1f5"
+
+# NOTE: Set these environment variables via Wrangler secrets or Dashboard:
+# wrangler secret put FOOTBALL_API_KEY
+# wrangler secret put GEMINI_API_KEY
+# wrangler secret put DEEPSEEK_API_KEY
