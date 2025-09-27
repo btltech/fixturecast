@@ -741,7 +741,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectMatch, onSelectTeam, navi
         <button
           onClick={() => {
             if (window.confirm('Are you sure you want to regenerate all predictions?')) {
-              fetch('/api/regenerate-predictions', { method: 'POST' })
+              fetch('https://www.fixturecast.com/api/regenerate-predictions', { method: 'POST' })
                 .then(response => {
                   if (response.ok) {
                     alert('All predictions are being regenerated.');
