@@ -25,8 +25,14 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
     overallAccuracy: daily.overallAccuracyPct || 0,
     outcomeAccuracyPct: daily.outcomeAccuracyPct || 0,
     exactScoreAccuracyPct: daily.exactScoreAccuracyPct || 0,
-    bttsAccuracyPct: daily.bttsAccuracyPct || 0
-  } : { totalPredictions:0, correctOutcomes:0, correctScorelines:0, correctBtts:0, overallAccuracy:0, outcomeAccuracyPct:0, exactScoreAccuracyPct:0, bttsAccuracyPct:0 };
+    bttsAccuracyPct: daily.bttsAccuracyPct || 0,
+    goalLineAccuracyPct: daily.goalLineAccuracyPct || 0,
+    cleanSheetAccuracyPct: daily.cleanSheetAccuracyPct || 0,
+    correctGoalLine: daily.correctGoalLine || 0,
+    correctCleanSheet: daily.correctCleanSheet || 0,
+    correctCorners: daily.correctCorners || 0,
+    cornersAccuracyPct: daily.cornersAccuracyPct || 0
+  } : { totalPredictions:0, correctOutcomes:0, correctScorelines:0, correctBtts:0, overallAccuracy:0, outcomeAccuracyPct:0, exactScoreAccuracyPct:0, bttsAccuracyPct:0, goalLineAccuracyPct:0, cleanSheetAccuracyPct:0, correctGoalLine:0, correctCleanSheet:0, correctCorners:0, cornersAccuracyPct:0 };
 
   useEffect(() => {
     let cancelled = false;
@@ -162,22 +168,25 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
         </h3>
         
         {/* Summary Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-8 gap-4 mb-6">
           <StatCard label="Total Predictions" value={safeAccuracyStats.totalPredictions} />
           <StatCard label="Overall Accuracy" value={`${formatPercentage(safeAccuracyStats.overallAccuracy)}`} highlightColor={getAccuracyColor(safeAccuracyStats.overallAccuracy)} />
           <StatCard label="Outcome (Winner)" value={`${safeAccuracyStats.correctOutcomes}/${safeAccuracyStats.totalPredictions}`} sub={`${formatPercentage(safeAccuracyStats.outcomeAccuracyPct)}`} />
           <StatCard label="Exact Scorelines" value={`${safeAccuracyStats.correctScorelines}/${safeAccuracyStats.totalPredictions}`} sub={`${formatPercentage(safeAccuracyStats.exactScoreAccuracyPct)}`} />
           <StatCard label="BTTS" value={`${safeAccuracyStats.correctBtts}/${safeAccuracyStats.totalPredictions}`} sub={`${formatPercentage(safeAccuracyStats.bttsAccuracyPct)}`} />
+          <StatCard label="Goal Line" value={`${safeAccuracyStats.correctGoalLine}/${safeAccuracyStats.totalPredictions}`} sub={`${formatPercentage(safeAccuracyStats.goalLineAccuracyPct)}`} />
+          <StatCard label="Clean Sheet" value={`${safeAccuracyStats.correctCleanSheet}/${safeAccuracyStats.totalPredictions}`} sub={`${formatPercentage(safeAccuracyStats.cleanSheetAccuracyPct)}`} />
+          <StatCard label="Corners" value={`${safeAccuracyStats.correctCorners}/${safeAccuracyStats.totalPredictions}`} sub={`${formatPercentage(safeAccuracyStats.cornersAccuracyPct)}`} />
         </div>
 
         {/* Detailed Category Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           <CategoryAccuracyCard
             title="Winner (Outcome)"
             correct={safeAccuracyStats.correctOutcomes}
             total={safeAccuracyStats.totalPredictions}
             pct={safeAccuracyStats.outcomeAccuracyPct}
-            description="Correctly predicted match result (Home/Draw/Away)."
+            description="Correctly predicted match result (Home / Draw / Away)."
           />
           <CategoryAccuracyCard
             title="Exact Scoreline"
@@ -192,6 +201,27 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
             total={safeAccuracyStats.totalPredictions}
             pct={safeAccuracyStats.bttsAccuracyPct}
             description="BTTS Yes/No prediction correctness."
+          />
+          <CategoryAccuracyCard
+            title="Goal Line (O/U)"
+            correct={safeAccuracyStats.correctGoalLine}
+            total={safeAccuracyStats.totalPredictions}
+            pct={safeAccuracyStats.goalLineAccuracyPct}
+            description="Over/Under correctness (default line 2.5 unless model provided)."
+          />
+          <CategoryAccuracyCard
+            title="Clean Sheet"
+            correct={safeAccuracyStats.correctCleanSheet}
+            total={safeAccuracyStats.totalPredictions}
+            pct={safeAccuracyStats.cleanSheetAccuracyPct}
+            description="Correctly predicted a clean sheet scenario."
+          />
+          <CategoryAccuracyCard
+            title="Corners (O/U 9.5)"
+            correct={safeAccuracyStats.correctCorners}
+            total={safeAccuracyStats.totalPredictions}
+            pct={safeAccuracyStats.cornersAccuracyPct}
+            description="Corner total Over/Under 9.5 derived from model pick and actual stats."
           />
         </div>
 
@@ -259,10 +289,10 @@ export default AccuracyDashboard;
 
 interface StatCardProps { label: string; value: React.ReactNode; sub?: string; highlightColor?: string; }
 const StatCard: React.FC<StatCardProps> = ({ label, value, sub, highlightColor }) => (
-  <div className="bg-gray-800 rounded-lg p-4">
-    <p className="text-sm text-gray-400">{label}</p>
+  <div className="bg-gray-800 rounded-lg p-4" title={label}>
+    <p className="text-sm text-gray-400" aria-label={label}>{label}</p>
     <p className={`text-2xl font-bold ${highlightColor || 'text-white'}`}>{value}</p>
-    {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
+    {sub && <p className="text-xs text-gray-500 mt-1" aria-label={`${label} percentage`}>{sub}</p>}
   </div>
 );
 
@@ -272,7 +302,7 @@ const CategoryAccuracyCard: React.FC<CategoryAccuracyCardProps> = ({ title, corr
   const barColor = pctNum >= 70 ? 'bg-green-500' : pctNum >= 40 ? 'bg-yellow-500' : 'bg-red-500';
   const pctLabel = `${pctNum.toFixed(1)}%`;
   return (
-    <div className="bg-gray-800 rounded-lg p-4 flex flex-col">
+    <div className="bg-gray-800 rounded-lg p-4 flex flex-col" title={description} aria-label={`${title} accuracy card`}>
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-sm font-semibold text-white">{title}</h4>
         <span className="text-xs text-gray-400">{correct}/{total}</span>

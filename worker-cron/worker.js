@@ -771,6 +771,31 @@ async function triggerScoreUpdate(env) {
     }));
     console.log(`✅ Found ${finishedMatches.length} finished matches for accuracy tracking`);
 
+    // Enrich with corner statistics (total corners) – optional best-effort
+    if (finishedMatches.length) {
+      const MAX_CONCURRENT = 6;
+      for (let i = 0; i < finishedMatches.length; i += MAX_CONCURRENT) {
+        const batch = finishedMatches.slice(i, i + MAX_CONCURRENT);
+        await Promise.all(batch.map(async m => {
+          try {
+            const statsResp = await fetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${m.fixtureId}` , { headers: { 'x-apisports-key': env.FOOTBALL_API_KEY }});
+            if (!statsResp.ok) return;
+            const statsJson = await statsResp.json();
+            // statsJson.response is array [home, away]; each has statistics array with type 'Corner Kicks'
+            const entries = statsJson.response || [];
+            let totalCorners = 0;
+            for (const side of entries) {
+              const stat = (side.statistics || []).find(s => /corner/i.test(s.type));
+              if (stat && typeof stat.value === 'number') totalCorners += stat.value;
+            }
+            if (totalCorners > 0) m.totalCorners = totalCorners;
+          } catch {}
+        }));
+      }
+      const withCorners = finishedMatches.filter(m=> m.totalCorners !== undefined).length;
+      console.log(`🧩 Corner stats enrichment complete (${withCorners}/${finishedMatches.length} with totals)`);
+    }
+
     // If KV present, compute accuracy vs stored predictions (legacy or structured)
     let accuracySummary = null;
     if (env.PREDICTIONS_KV && finishedMatches.length) {
@@ -801,6 +826,8 @@ async function computeAndPersistAccuracy(kv, finishedMatches, dateStr) {
   let correctOutcome = 0;
   let correctScore = 0;
   let correctBtts = 0;
+  let correctCorners = 0;
+  let applicableCorners = 0;
   // League aggregation map
   const leagueMap = new Map(); // leagueId -> { leagueId, league, processed, correctOutcome, correctScore, correctBtts }
   for (const m of finishedMatches) {
@@ -829,9 +856,65 @@ async function computeAndPersistAccuracy(kv, finishedMatches, dateStr) {
     const bttsPick = typeof p.btts === 'string' ? /yes/i.test(p.btts) : p.btts; // could be Yes/No or boolean
     const bttsActual = m.homeScore>0 && m.awayScore>0;
     const bttsCorrect = bttsPick === undefined ? null : !!bttsPick === bttsActual;
+
+    // Goal line correctness (supports either overUnder string OR goalLine object with probabilities)
+    let goalLineCorrect = null;
+    try {
+      const totalGoals = m.homeScore + m.awayScore;
+      if (p.overUnder && typeof p.overUnder === 'string') {
+        if (/over/i.test(p.overUnder)) goalLineCorrect = totalGoals > 2.5;
+        else if (/under/i.test(p.overUnder)) goalLineCorrect = totalGoals <= 2.5;
+      } else if (p.goalLine && typeof p.goalLine === 'object') {
+        const line = typeof p.goalLine.line === 'number' ? p.goalLine.line : 2.5;
+        const picked = (p.goalLine.overProbability ?? 0) >= (p.goalLine.underProbability ?? 0) ? 'OVER' : 'UNDER';
+        goalLineCorrect = picked === 'OVER' ? totalGoals > line : totalGoals <= line;
+      }
+    } catch {}
+
+    // Clean sheet correctness (predicting at least one team to keep a clean sheet via predictedScore) 
+    // If predictedScore exists, infer whether a clean sheet was implied and check actual
+    let cleanSheetCorrect = null;
+    try {
+      if (p.predictedScore && /^(\d+)[-:](\d+)$/.test(p.predictedScore)) {
+        const [ph, pa] = p.predictedScore.split(/[-:]/).map(n=>parseInt(n,10));
+        // If predicted a 0 for away and away actually 0 OR predicted a 0 for home and home actually 0 counts as correct
+        if (pa === 0 || ph === 0) {
+          const homeCs = pa === 0 && m.awayScore === 0; // predicted away 0 => home clean sheet
+          const awayCs = ph === 0 && m.homeScore === 0; // predicted home 0 => away clean sheet
+          cleanSheetCorrect = (homeCs || awayCs);
+        } else {
+          cleanSheetCorrect = false; // predicted no clean sheet scenario
+        }
+      } else if (p.cleanSheet && typeof p.cleanSheet === 'object') {
+        // If probabilities given choose side with higher probability > 50% and evaluate
+        const homeProb = p.cleanSheet.homeTeam ?? 0;
+        const awayProb = p.cleanSheet.awayTeam ?? 0;
+        if (homeProb > 50 || awayProb > 50) {
+          if (homeProb >= awayProb) cleanSheetCorrect = m.awayScore === 0; else cleanSheetCorrect = m.homeScore === 0;
+        }
+      }
+    } catch {}
+
+    // Corners correctness: if prediction has corners { overProbability, underProbability } and we have totalCorners
+    let cornersCorrect = null;
+    try {
+      if (m.totalCorners !== undefined && p.corners && typeof p.corners === 'object') {
+        const overProb = p.corners.overProbability ?? p.corners.over ?? null;
+        const underProb = p.corners.underProbability ?? p.corners.under ?? null;
+        if (overProb !== null && underProb !== null) {
+          const pick = overProb >= underProb ? 'OVER' : 'UNDER';
+          // Assume standard market line 9.5 (so integer >9 = over)
+          const isOver = m.totalCorners > 9; // 10 or more corners -> over 9.5
+          cornersCorrect = pick === 'OVER' ? isOver : !isOver;
+        }
+      }
+    } catch {}
+
     if (outcomeCorrect) correctOutcome++;
     if (scoreCorrect) correctScore++;
     if (bttsCorrect) correctBtts += bttsCorrect ? 1 : 0;
+    if (cornersCorrect !== null) { applicableCorners++; if (cornersCorrect) correctCorners++; }
+    // Aggregate counters for goal line & clean sheet using arrays filtered later
     // League accumulation
     const lid = m.leagueId || 'unknown';
     if (!leagueMap.has(lid)) {
@@ -856,6 +939,9 @@ async function computeAndPersistAccuracy(kv, finishedMatches, dateStr) {
       outcomeCorrect,
       scoreCorrect,
       bttsCorrect,
+      cornersCorrect,
+      goalLineCorrect,
+      cleanSheetCorrect,
       accuracy: matchAccuracy,
       computedAt: new Date().toISOString()
     };
@@ -863,6 +949,10 @@ async function computeAndPersistAccuracy(kv, finishedMatches, dateStr) {
     await kv.put(`accuracy:${dateStr}:fixture:${m.fixtureId}`, JSON.stringify(record));
   }
   const total = perFixture.length;
+  const goalLineApplicable = perFixture.filter(r=> r.goalLineCorrect !== null);
+  const goalLineCorrectCount = goalLineApplicable.filter(r=> r.goalLineCorrect === true).length;
+  const cleanSheetApplicable = perFixture.filter(r=> r.cleanSheetCorrect !== null);
+  const cleanSheetCorrectCount = cleanSheetApplicable.filter(r=> r.cleanSheetCorrect === true).length;
   // Build league breakdown array
   const leagueBreakdown = Array.from(leagueMap.values()).map(l => ({
     ...l,
@@ -878,9 +968,15 @@ async function computeAndPersistAccuracy(kv, finishedMatches, dateStr) {
     correctOutcome,
     correctScore,
     correctBtts,
+  correctCorners,
+    correctGoalLine: goalLineCorrectCount,
+    correctCleanSheet: cleanSheetCorrectCount,
     outcomeAccuracyPct: total ? (correctOutcome/total)*100 : 0,
     exactScoreAccuracyPct: total ? (correctScore/total)*100 : 0,
     bttsAccuracyPct: (perFixture.filter(r=>r.bttsCorrect!==null).length ? (correctBtts / perFixture.filter(r=>r.bttsCorrect!==null).length)*100 : 0),
+  cornersAccuracyPct: applicableCorners ? (correctCorners / applicableCorners)*100 : 0,
+    goalLineAccuracyPct: goalLineApplicable.length ? (goalLineCorrectCount / goalLineApplicable.length)*100 : 0,
+    cleanSheetAccuracyPct: cleanSheetApplicable.length ? (cleanSheetCorrectCount / cleanSheetApplicable.length)*100 : 0,
     overallAccuracyPct: total ? perFixture.reduce((s,r)=>s+r.accuracy,0)/total : 0,
     processedAt: new Date().toISOString(),
     leagueBreakdown: leagueBreakdown.slice(0, 50)
