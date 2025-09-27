@@ -309,8 +309,7 @@ async function fetchFeaturedLeagueFixtures(dateStr, env) {
         const resp = await fetch(`https://v3.football.api-sports.io/fixtures?date=${dateStr}&league=${lid}`, {
           method: 'GET',
           headers: {
-            'x-rapidapi-key': env.FOOTBALL_API_KEY,
-            'x-rapidapi-host': 'v3.football.api-sports.io'
+            'x-apisports-key': env.FOOTBALL_API_KEY
           }
         });
         if (!resp.ok) {
@@ -347,8 +346,7 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false)
       const footballResponse = await fetch(`https://v3.football.api-sports.io/fixtures?date=${today}`, {
         method: 'GET',
         headers: {
-          'x-rapidapi-key': env.FOOTBALL_API_KEY,
-          'x-rapidapi-host': 'v3.football.api-sports.io'
+          'x-apisports-key': env.FOOTBALL_API_KEY
         }
       });
       if (!footballResponse.ok) {
@@ -596,8 +594,7 @@ async function triggerScoreUpdate(env) {
     const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${dateStr}&status=FT`, {
       method: 'GET',
       headers: {
-        'x-rapidapi-key': env.FOOTBALL_API_KEY,
-        'x-rapidapi-host': 'v3.football.api-sports.io'
+        'x-apisports-key': env.FOOTBALL_API_KEY
       }
     });
     
