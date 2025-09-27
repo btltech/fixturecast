@@ -6,6 +6,7 @@ import { Prediction, Match, PredictionContext } from '../types';
 import { calculatePredictionConfidence } from './confidenceService';
 import { storeDailyPrediction } from './accuracyService';
 import { withRateLimit } from './rateLimitService';
+import { advancedAnalyticsService } from './advancedAnalyticsService';
 
 const GEMINI_RETRY = 2; // kept for potential retry logic of proxy failures
 const PROXY_ENDPOINT = '/api/ai/gemini/predict';
@@ -60,9 +61,14 @@ export const getMatchPrediction = async (match: Match, context?: PredictionConte
   const delayMs = isTestEnv ? 10 : 2000;
   await delay(delayMs);
 
+    // Generate advanced analytics for enhanced context
+    const advancedAnalytics = await advancedAnalyticsService.generateAdvancedAnalytics(match);
+    const analyticsContext = advancedAnalyticsService.formatAnalyticsForPrompt(advancedAnalytics);
+
     // Debug logging to see what context is being built
     console.log(`🔍 Context debug for ${match.homeTeam} vs ${match.awayTeam}:`, {
       hasContext: !!context,
+      hasAdvancedAnalytics: !!advancedAnalytics,
       leagueTableSnippet: context?.leagueTableSnippet || 'None',
       homeTeamFormSnippet: context?.homeTeamFormSnippet || 'None',
       awayTeamFormSnippet: context?.awayTeamFormSnippet || 'None',
@@ -84,9 +90,11 @@ export const getMatchPrediction = async (match: Match, context?: PredictionConte
       ${context.bttsHistoricSnippet ? `\n- BTTS History: ${context.bttsHistoricSnippet}` : ''}
       ${context.homeTeamInjuriesSnippet ? `\n- ${match.homeTeam} Injuries: ${context.homeTeamInjuriesSnippet}` : ''}
       ${context.awayTeamInjuriesSnippet ? `\n- ${match.awayTeam} Injuries: ${context.awayTeamInjuriesSnippet}` : ''}
-    ` : '';
+      
+      ${analyticsContext}
+    ` : analyticsContext;
     
-    console.log(`📝 Generated context prompt:`, contextPrompt || 'No context data available');
+    console.log(`📝 Generated enhanced context prompt:`, contextPrompt || 'No context data available');
     
     const prompt = `
 You are a football prediction engine that generates detailed, on-demand predictions for a single, user-selected fixture inside the "My Teams" tab. This must never run automatically.
@@ -98,20 +106,37 @@ DATA SOURCE POLICY
 INPUTS (from API-Football)
 - Competition/season identifiers, fixture (home/away, venue), recent form (last 5–10 matches with recency weighting), head-to-head (wins/draws, BTTS), team stats (goals, xG/xGA, shots, possession, discipline, corners), squad status (injuries/suspensions), context (rest days, congestion, travel/time zone, venue/weather if present).
 
-MODELING (Ensemble)
-- GBDT baseline over tabular features; Poisson regression to convert adjusted xG/xGA to expected goals and discrete scoreline probabilities; LSTM for recent form momentum; GNN (or team-level fallback) for lineup/tactical interactions; Bayesian layer to widen uncertainty for injuries/fatigue/travel and sparse national-team history.
+ADVANCED MODELING (Enhanced Ensemble)
+- ELO/Glicko rating system baseline with dynamic adjustments
+- Monte Carlo simulation for scoreline probabilities based on adjusted attack/defense rates  
+- Temporal neural networks for form momentum with exponential decay (0.9^days_ago weighting)
+- Market efficiency analysis: compare to betting odds when available to detect value
+- Bayesian hierarchical modeling for league-specific effects and uncertainty quantification
+- Weather impact modeling for outdoor matches (wind, rain, temperature effects on gameplay)
+- Referee tendency analysis (cards, penalties, advantage play style)
 
-FEATURE ENGINEERING
-- Rolling form windows (5–10) with time-decay, opponent-adjusted ratings, venue-adjusted performance, attack/defense indices, set-piece threat, pressing/crossing profiles, discipline risk, home advantage, league/tournament style, and congestion/rest.
-- For national teams with sparse data, reduce reliance on stale history and down-weight H2H.
+ENHANCED FEATURE ENGINEERING  
+- **Performance Metrics**: Goals per game, xG per game, shots on target %, possession effectiveness
+- **Defensive Strength**: Clean sheets, goals conceded per game, defensive actions per game
+- **Form Analysis**: Weighted recent form (last 6 matches), home/away split performance
+- **Matchup Analysis**: Style compatibility (possession vs counter-attack), pace differential
+- **Squad Rotation**: Fatigue modeling based on minutes played in last 14 days
+- **Psychological Factors**: Pressure situations (relegation battle, European qualification, derbies)
+- **Seasonal Trends**: Performance by month, fixture congestion impact, winter break effects
 
-PIPELINE
-1) Prepare features normalized to league context, with time weighting.
-2) Multi-model generation (GBDT, Poisson-xG, LSTM, GNN, Bayesian overlay).
-3) Ensemble combination → calibrated 1X2 probabilities aligned with the aggregated scoreline distribution.
-4) Confidence calibration → High/Medium/Low using data richness, model agreement, and national-team sparsity flags.
-5) Structured reasoning sections: ML consensus, statistical patterns, tactical notes, uncertainty factors.
-6) Markets: BTTS, O/U 2.5 (and 1.5/3.5 if data allows), HT/FT, score ranges, corners.
+ENHANCED PIPELINE
+1) **Data Quality Assessment**: Score available data richness (0-100) and adjust confidence accordingly
+2) **Multi-Model Generation**: 
+   - ELO-based probability baseline
+   - Monte Carlo scoreline simulation (1000+ iterations)
+   - Form momentum neural modeling with attention mechanisms
+   - Market efficiency comparison when odds available
+   - Bayesian uncertainty quantification
+3) **Ensemble Weighting**: Dynamic model weights based on historical accuracy for similar matchups
+4) **Probability Calibration**: Isotonic regression to ensure well-calibrated probabilities
+5) **Confidence Scoring**: Multi-factor confidence based on data quality, model agreement, historical accuracy
+6) **Risk Assessment**: Identify high-variance scenarios (cup matches, relegation battles, injury-depleted squads)
+7) **Market Coverage**: Enhanced markets with correlations (Asian handicaps, exact scorelines, goalscorer props)
 
 POST-PROCESSING RULES
 - Normalize every probability set to 100% (1X2, BTTS, O/U, HT/FT). Ensure Poisson scoreline probabilities integrate to 1 and are consistent with expected goals and outcome probabilities. Round sensibly while maintaining normalization.

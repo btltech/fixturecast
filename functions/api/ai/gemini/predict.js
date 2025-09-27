@@ -92,7 +92,7 @@ export async function onRequest(context) {
 }
 
 function buildPrompt(match, ctx) {
-  const base = `You are a football prediction engine that generates detailed predictions. Generate JSON output with complete analysis including mandatory Key Factors Analysis.
+  const base = `You are an advanced football prediction engine using state-of-the-art modeling techniques. Generate comprehensive predictions with detailed analysis.
 
 MATCH DETAILS
 - League: ${match.league || 'Unknown'}
@@ -100,20 +100,44 @@ MATCH DETAILS
 - Away Team: ${match.awayTeam}
 - Date: ${match.date}
 
-${ctx ? `CONTEXT:\n${Object.entries(ctx).map(([k,v])=>`- ${k}: ${typeof v==='string'?v:JSON.stringify(v)}`).join('\n')}\n` : ''}
+${ctx ? `CONTEXT DATA:\n${Object.entries(ctx).map(([k,v])=>`- ${k}: ${typeof v==='string'?v:JSON.stringify(v)}`).join('\n')}\n` : ''}
+
+ADVANCED MODELING APPROACH
+Apply these sophisticated techniques in your analysis:
+- ELO rating system with dynamic adjustments for recent form
+- Monte Carlo simulation for scoreline probabilities (consider 1000+ scenarios)
+- Temporal analysis with exponential decay weighting (recent matches weighted higher)
+- Bayesian inference for uncertainty quantification
+- Market efficiency principles (if this were a betting market, what would be fair odds?)
+- Weather/conditions impact on gameplay style
+- Referee tendencies and their impact on match flow
+- Psychological factors (pressure situations, rivalry intensity)
+- Squad rotation and fatigue modeling
+- Tactical matchup analysis (style compatibility)
+
+ENHANCED FEATURE ANALYSIS
+Consider these advanced metrics:
+- Attack/Defense efficiency rates adjusted for opposition quality  
+- xG trends over last 10 matches with opponent adjustment
+- Home advantage quantified by league and specific venue
+- Form momentum (not just W/L/D but performance quality trends)
+- Set-piece effectiveness (corners, free kicks conversion rates)
+- Discipline patterns (cards per game, impact on team shape)
+- Injury impact weighted by player importance (minutes played, key player index)
+- Fixture congestion effects on performance
 
 OUTPUT FORMAT REQUIREMENTS
-You MUST return a JSON object with ALL required fields:
-- homeWinProbability: integer 0-100
+Return a JSON object with ALL required fields:
+- homeWinProbability: integer 0-100 (based on sophisticated modeling, not gut feeling)
 - drawProbability: integer 0-100  
 - awayWinProbability: integer 0-100
-- predictedScoreline: string (e.g., "2-1")
-- confidence: string ("High", "Medium", or "Low")
-- keyFactors: MANDATORY array of objects with "category" and "points" fields. This field is required and must never be empty or missing.
-- goalLine: object with "line" (number), "overProbability" (0-100), "underProbability" (0-100)
-- btts: object with "yesProbability" (0-100), "noProbability" (0-100)
+- predictedScoreline: string (most likely outcome from Monte Carlo analysis)
+- confidence: string ("High", "Medium", or "Low" based on data quality and model agreement)
+- keyFactors: MANDATORY detailed array with categories like "Form Analysis", "Tactical Matchup", "Key Players", "Historical Trends", "Conditions", etc.
+- goalLine: object with "line" (typically 2.5), "overProbability", "underProbability"
+- btts: object with "yesProbability", "noProbability" based on attack/defense rates
 
-The keyFactors field MUST include tactical analysis, recent form, head-to-head insights, and injury considerations even if data is limited.
+Apply rigorous statistical thinking. Consider base rates, regression to the mean, sample sizes, and uncertainty. Provide probabilities that reflect genuine analytical confidence, not artificial precision.
 
 Return ONLY the JSON object, no other text.`;
   
