@@ -22,8 +22,11 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
     correctOutcomes: daily.correctOutcome || 0,
     correctScorelines: daily.correctScore || 0,
     correctBtts: daily.correctBtts || 0,
-    overallAccuracy: daily.overallAccuracyPct || 0
-  } : { totalPredictions:0, correctOutcomes:0, correctScorelines:0, correctBtts:0, overallAccuracy:0 };
+    overallAccuracy: daily.overallAccuracyPct || 0,
+    outcomeAccuracyPct: daily.outcomeAccuracyPct || 0,
+    exactScoreAccuracyPct: daily.exactScoreAccuracyPct || 0,
+    bttsAccuracyPct: daily.bttsAccuracyPct || 0
+  } : { totalPredictions:0, correctOutcomes:0, correctScorelines:0, correctBtts:0, overallAccuracy:0, outcomeAccuracyPct:0, exactScoreAccuracyPct:0, bttsAccuracyPct:0 };
 
   useEffect(() => {
     let cancelled = false;
@@ -158,28 +161,38 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
           Current Accuracy Statistics
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-800 rounded-lg p-4">
-            <p className="text-sm text-gray-400">Total Predictions</p>
-            <p className="text-2xl font-bold text-white">{safeAccuracyStats.totalPredictions}</p>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg p-4">
-            <p className="text-sm text-gray-400">Correct Outcomes</p>
-            <p className="text-2xl font-bold text-white">{safeAccuracyStats.correctOutcomes}</p>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg p-4">
-            <p className="text-sm text-gray-400">Overall Accuracy</p>
-            <p className={`text-2xl font-bold ${getAccuracyColor(safeAccuracyStats.overallAccuracy)}`}>
-              {formatPercentage(safeAccuracyStats.overallAccuracy)}
-            </p>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-400">BTTS Correct</p>
-              <p className="text-2xl font-bold text-white">{safeAccuracyStats.correctBtts}</p>
-          </div>
+        {/* Summary Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <StatCard label="Total Predictions" value={safeAccuracyStats.totalPredictions} />
+          <StatCard label="Overall Accuracy" value={`${formatPercentage(safeAccuracyStats.overallAccuracy)}`} highlightColor={getAccuracyColor(safeAccuracyStats.overallAccuracy)} />
+          <StatCard label="Outcome (Winner)" value={`${safeAccuracyStats.correctOutcomes}/${safeAccuracyStats.totalPredictions}`} sub={`${formatPercentage(safeAccuracyStats.outcomeAccuracyPct)}`} />
+          <StatCard label="Exact Scorelines" value={`${safeAccuracyStats.correctScorelines}/${safeAccuracyStats.totalPredictions}`} sub={`${formatPercentage(safeAccuracyStats.exactScoreAccuracyPct)}`} />
+          <StatCard label="BTTS" value={`${safeAccuracyStats.correctBtts}/${safeAccuracyStats.totalPredictions}`} sub={`${formatPercentage(safeAccuracyStats.bttsAccuracyPct)}`} />
+        </div>
+
+        {/* Detailed Category Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <CategoryAccuracyCard
+            title="Winner (Outcome)"
+            correct={safeAccuracyStats.correctOutcomes}
+            total={safeAccuracyStats.totalPredictions}
+            pct={safeAccuracyStats.outcomeAccuracyPct}
+            description="Correctly predicted match result (Home/Draw/Away)."
+          />
+          <CategoryAccuracyCard
+            title="Exact Scoreline"
+            correct={safeAccuracyStats.correctScorelines}
+            total={safeAccuracyStats.totalPredictions}
+            pct={safeAccuracyStats.exactScoreAccuracyPct}
+            description="Predicted score exactly (e.g. 2-1)."
+          />
+          <CategoryAccuracyCard
+            title="Both Teams To Score"
+            correct={safeAccuracyStats.correctBtts}
+            total={safeAccuracyStats.totalPredictions}
+            pct={safeAccuracyStats.bttsAccuracyPct}
+            description="BTTS Yes/No prediction correctness."
+          />
         </div>
 
         {/* League Breakdown */}
@@ -241,3 +254,39 @@ export const AccuracyDashboard: React.FC<AccuracyDashboardProps> = ({ className 
 };
 
 export default AccuracyDashboard;
+
+// --- Small Presentational Components ---
+
+interface StatCardProps { label: string; value: React.ReactNode; sub?: string; highlightColor?: string; }
+const StatCard: React.FC<StatCardProps> = ({ label, value, sub, highlightColor }) => (
+  <div className="bg-gray-800 rounded-lg p-4">
+    <p className="text-sm text-gray-400">{label}</p>
+    <p className={`text-2xl font-bold ${highlightColor || 'text-white'}`}>{value}</p>
+    {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
+  </div>
+);
+
+interface CategoryAccuracyCardProps { title: string; correct: number; total: number; pct: number; description: string; }
+const CategoryAccuracyCard: React.FC<CategoryAccuracyCardProps> = ({ title, correct, total, pct, description }) => {
+  const pctNum = Number(pct) || 0;
+  const barColor = pctNum >= 70 ? 'bg-green-500' : pctNum >= 40 ? 'bg-yellow-500' : 'bg-red-500';
+  const pctLabel = `${pctNum.toFixed(1)}%`;
+  return (
+    <div className="bg-gray-800 rounded-lg p-4 flex flex-col">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-sm font-semibold text-white">{title}</h4>
+        <span className="text-xs text-gray-400">{correct}/{total}</span>
+      </div>
+      <div className="mb-2">
+        <div className="flex justify-between text-xs text-gray-400 mb-1">
+          <span>Accuracy</span>
+          <span className="text-white font-medium">{pctLabel}</span>
+        </div>
+        <div className="h-2 w-full bg-gray-700 rounded-full overflow-hidden">
+          <div className={`h-2 ${barColor}`} style={{ width: pctNum > 100 ? '100%' : pctNum + '%' }}></div>
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 leading-snug mt-auto">{description}</p>
+    </div>
+  );
+};

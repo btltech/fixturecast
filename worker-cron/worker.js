@@ -263,6 +263,148 @@ export default {
         return new Response(JSON.stringify({ error: 'history-read-failed', message: e.message }), { status: 500, headers: { 'Content-Type':'application/json' }});
       }
     }
+
+    // Historical accuracy backfill: /backfill-accuracy?date=YYYY-MM-DD OR ?start=YYYY-MM-DD&end=YYYY-MM-DD OR ?days=7
+    if (url.pathname === '/backfill-accuracy') {
+      const headers = { 'Content-Type': 'application/json', ...cors };
+      if (!env.FOOTBALL_API_KEY) {
+        return new Response(JSON.stringify({ error: 'missing-football-api-key' }), { status: 500, headers });
+      }
+      if (!env.PREDICTIONS_KV) {
+        return new Response(JSON.stringify({ error: 'kv-unavailable' }), { status: 500, headers });
+      }
+      try {
+        const force = url.searchParams.get('force') === 'true';
+        const singleDate = url.searchParams.get('date');
+        const start = url.searchParams.get('start');
+        const end = url.searchParams.get('end');
+        const daysParam = url.searchParams.get('days');
+        let dateList = [];
+        const today = new Date();
+        const validate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+        if (singleDate) {
+          if (!validate(singleDate)) return new Response(JSON.stringify({ error: 'invalid-date-format', expected: 'YYYY-MM-DD', provided: singleDate }), { status: 400, headers });
+          dateList = [singleDate];
+        } else if (start && end) {
+          if (!validate(start) || !validate(end)) return new Response(JSON.stringify({ error: 'invalid-range-format' }), { status: 400, headers });
+          if (start > end) return new Response(JSON.stringify({ error: 'start-after-end' }), { status: 400, headers });
+          let cursor = new Date(start);
+            const endDate = new Date(end);
+          while (cursor <= endDate) {
+            dateList.push(cursor.toISOString().slice(0,10));
+            cursor.setDate(cursor.getDate()+1);
+          }
+        } else if (daysParam) {
+          const days = Math.min(60, Math.max(1, parseInt(daysParam,10))); // cap at 60 days
+          for (let i=1;i<=days;i++) { // exclude today (incomplete)
+            const d = new Date(today.getTime()-i*24*60*60*1000).toISOString().slice(0,10);
+            dateList.push(d);
+          }
+        } else {
+          return new Response(JSON.stringify({ error: 'missing-params', usage: '/backfill-accuracy?date=YYYY-MM-DD | ?start=YYYY-MM-DD&end=YYYY-MM-DD | ?days=N' }), { status: 400, headers });
+        }
+        // Remove future dates or today (not finished fully)
+        dateList = dateList.filter(d => d < today.toISOString().slice(0,10));
+        const summaries = [];
+        for (const d of dateList) {
+          // Skip if aggregate exists and not forcing
+          if (!force) {
+            const existing = await env.PREDICTIONS_KV.get(`accuracy:${d}:aggregate`);
+            if (existing) {
+              summaries.push({ date: d, skipped: true, reason: 'exists' });
+              continue;
+            }
+          }
+          // Fetch finished fixtures for date d
+          let finished = [];
+          try {
+            const r = await fetch(`https://v3.football.api-sports.io/fixtures?date=${d}&status=FT`, { headers: { 'x-apisports-key': env.FOOTBALL_API_KEY }});
+            if (!r.ok) {
+              summaries.push({ date: d, error: true, status: r.status });
+              continue;
+            }
+            const j = await r.json();
+            finished = (j.response||[]).map(f => ({
+              fixtureId: f.fixture.id,
+              leagueId: f.league.id,
+              league: f.league.name,
+              date: f.fixture.date,
+              homeTeam: f.teams.home.name,
+              awayTeam: f.teams.away.name,
+              homeScore: f.goals.home ?? 0,
+              awayScore: f.goals.away ?? 0
+            }));
+          } catch (e) {
+            summaries.push({ date: d, error: true, message: e.message });
+            continue;
+          }
+          if (!finished.length) {
+            summaries.push({ date: d, processed: 0, note: 'no-finished-matches' });
+            continue;
+          }
+          const agg = await computeAndPersistAccuracy(env.PREDICTIONS_KV, finished, d);
+          summaries.push({ date: d, finished: finished.length, accuracyProcessed: agg.processed, overallAccuracyPct: agg.overallAccuracyPct });
+        }
+        return new Response(JSON.stringify({ processedDays: summaries.length, force, summaries }), { headers });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: 'backfill-failed', message: e.message }), { status: 500, headers });
+      }
+    }
+
+    // Diagnostics: compare global vs featured-only fetch for a date
+    if (url.pathname === '/fixtures-debug') {
+      const date = url.searchParams.get('date') || new Date().toISOString().slice(0,10);
+      const includeFixtures = url.searchParams.get('details') === 'true';
+      const runFeatured = url.searchParams.get('featured') !== 'false'; // default true
+      const leagueFilter = url.searchParams.get('league'); // optional single league id
+      const headers = { 'Content-Type':'application/json', ...cors };
+      try {
+        const out = { date, global: null, featuredAggregate: null, notes: [], leagueFilter: leagueFilter?Number(leagueFilter):null };
+        // Global fetch (only if no explicit league filter)
+        if (!leagueFilter) {
+          try {
+            const r = await fetch(`https://v3.football.api-sports.io/fixtures?date=${date}`, { headers: { 'x-apisports-key': env.FOOTBALL_API_KEY }});
+            const j = await r.json();
+            out.global = {
+              ok: r.ok,
+              status: r.status,
+              count: j.response?.length || 0,
+              leagues: aggregateByLeague(j.response || [])
+            };
+          } catch (e) {
+            out.global = { ok: false, error: e.message };
+          }
+        }
+        // Featured-only per-league fetch or single league fetch
+        if (runFeatured) {
+          const targetLeagueIds = leagueFilter ? [Number(leagueFilter)] : Array.from(FEATURED_LEAGUE_IDS);
+          const perLeague = [];
+          for (const lid of targetLeagueIds) {
+            try {
+              const r = await fetch(`https://v3.football.api-sports.io/fixtures?date=${date}&league=${lid}`, { headers: { 'x-apisports-key': env.FOOTBALL_API_KEY }});
+              const j = await r.json();
+              perLeague.push({ leagueId: lid, status: r.status, ok: r.ok, count: j.response?.length || 0 });
+            } catch (e) {
+              perLeague.push({ leagueId: lid, ok: false, error: e.message, count: 0 });
+            }
+          }
+          const total = perLeague.reduce((s,l)=>s+l.count,0);
+          out.featuredAggregate = { total, perLeague: perLeague.sort((a,b)=>b.count-a.count).slice(0,50) };
+        }
+        if (includeFixtures && out.global && out.global.count && out.global.count <= 60) {
+          // Provide truncated raw fixtures for inspection if small
+          try {
+            const r2 = await fetch(`https://v3.football.api-sports.io/fixtures?date=${date}`, { headers: { 'x-apisports-key': env.FOOTBALL_API_KEY }});
+            const j2 = await r2.json();
+            out.sample = (j2.response||[]).slice(0,25).map(f=>({ id: f.fixture.id, league: f.league.name, home: f.teams.home.name, away: f.teams.away.name, status: f.fixture.status?.short }));
+          } catch {}
+        }
+        out.meta = { featuredLeagueCount: FEATURED_LEAGUE_IDS.size, keyPresent: !!env.FOOTBALL_API_KEY };
+        return new Response(JSON.stringify(out, null, 2), { headers });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: 'fixtures-debug-failed', message: e.message }), { status: 500, headers });
+      }
+    }
     
   return new Response(`FixtureCast Cron Worker
     
@@ -271,6 +413,9 @@ Available endpoints:
 - /trigger-scores (manual score update)
 - /test-env (check environment variables)
 - /cron-status (check last cron execution and next triggers)
+ - /cron-history (recent cron executions)
+ - /fixtures-debug (diagnose fixture availability; params: date, details=true, league=<id>)
+ - /backfill-accuracy (recompute historical accuracy; params: date= | start=&end= | days=N [&force=true])
 
 Automated schedules:
 - Predictions: Every 6 hours (6AM, 12PM, 6PM, 11PM UK time)
@@ -835,4 +980,15 @@ function getNextPredictionTrigger() {
   next.setMilliseconds(0);
   
   return next.toISOString();
+}
+
+// Helper: aggregate fixtures by league (count only)
+function aggregateByLeague(fixtures) {
+  const map = new Map();
+  for (const f of fixtures) {
+    const lid = f?.league?.id; if (!lid) continue;
+    if (!map.has(lid)) map.set(lid, { leagueId: lid, league: f.league.name, country: f.league.country, count: 0 });
+    map.get(lid).count += 1;
+  }
+  return Array.from(map.values()).sort((a,b)=>b.count-a.count).slice(0,100);
 }
