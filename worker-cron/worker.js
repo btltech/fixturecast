@@ -181,7 +181,10 @@ export default {
         const force = url.searchParams.get('force') === 'true';
         const featuredOnly = url.searchParams.get('featuredOnly') === 'true' || env.FEATURED_ONLY_FETCH === 'true';
         const dateOverride = url.searchParams.get('date');
-        const result = await triggerPredictionUpdate(env, force, featuredOnly, dateOverride);
+        const resume = url.searchParams.get('resume') === 'true';
+        const waveSizeParam = url.searchParams.get('wave');
+        const waveSize = waveSizeParam ? Math.min(60, Math.max(1, parseInt(waveSizeParam, 10))) : null; // cap a single wave to 60
+        const result = await triggerPredictionUpdate(env, force, featuredOnly, dateOverride, { resume, waveSize });
         return new Response(JSON.stringify(result), { 
           status: 200,
           headers: { 'Content-Type': 'application/json', ...cors }
@@ -192,6 +195,87 @@ export default {
           error: error.message,
           stack: error.stack
         }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors }});
+      }
+    }
+
+    // List fixtures missing predictions for a date (featured or global)
+    if (url.pathname === '/missing-predictions') {
+      try {
+        const date = url.searchParams.get('date') || new Date().toISOString().slice(0,10);
+        const featuredOnly = url.searchParams.get('featuredOnly') === 'true';
+        const fixtures = await fetchFixturesForDate(date, env, featuredOnly);
+        if (!fixtures.length) return new Response(JSON.stringify({ date, totalFixtures: 0, missingCount: 0, missing: [] }), { headers: { 'Content-Type':'application/json', ...cors }});
+        const modelVersion = 'gemini-2.5-flash';
+        const missing = [];
+        for (const f of fixtures) {
+          const key = `pred:${f.fixture.id}:${modelVersion}:${date}`;
+          const found = env.PREDICTIONS_KV ? await env.PREDICTIONS_KV.get(key) : null;
+          if (!found) missing.push({ fixtureId: f.fixture.id, home: f.teams.home.name, away: f.teams.away.name, league: f.league.name });
+          if (missing.length >= 500) break; // safety cap
+        }
+        return new Response(JSON.stringify({ date, featuredOnly, totalFixtures: fixtures.length, missingCount: missing.length, missing }), { headers: { 'Content-Type':'application/json', ...cors }});
+      } catch (e) {
+        return new Response(JSON.stringify({ error: 'missing-predictions-failed', message: e.message }), { status: 500, headers: { 'Content-Type':'application/json', ...cors }});
+      }
+    }
+
+    // Rebuild daily aggregate from per-fixture prediction keys (data recovery)
+    if (url.pathname === '/rebuild-daily') {
+      try {
+        const date = url.searchParams.get('date');
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return new Response(JSON.stringify({ error: 'invalid-date', usage: '/rebuild-daily?date=YYYY-MM-DD&featuredOnly=true' }), { status: 400, headers: { 'Content-Type':'application/json', ...cors }});
+        }
+        const featuredOnly = url.searchParams.get('featuredOnly') === 'true';
+        if (!env.PREDICTIONS_KV) return new Response(JSON.stringify({ error: 'kv-unavailable' }), { status: 500, headers: { 'Content-Type':'application/json', ...cors }});
+        const fixtures = await fetchFixturesForDate(date, env, featuredOnly);
+        if (!fixtures.length) return new Response(JSON.stringify({ error: 'no-fixtures', date }), { status: 404, headers: { 'Content-Type':'application/json', ...cors }});
+        const modelVersion = 'gemini-2.5-flash';
+        const predictions = [];
+        for (const f of fixtures) {
+          const key = `pred:${f.fixture.id}:${modelVersion}:${date}`;
+          const rec = await env.PREDICTIONS_KV.get(key, 'json');
+          if (rec) {
+            predictions.push({
+              id: `rebuild_${f.fixture.id}_${Date.now()}`,
+              matchId: f.fixture.id,
+              homeTeam: f.teams.home.name,
+              awayTeam: f.teams.away.name,
+              league: f.league.name,
+              leagueId: f.league.id,
+              season: f.league.season,
+              matchDate: f.fixture.date,
+              venue: f.fixture.venue?.name || '',
+              country: f.league.country || '',
+              prediction: rec.numeric_predictions || rec.prediction || {},
+              timestamp: rec.meta?.last_updated || new Date().toISOString(),
+              automated: true,
+              source: 'rebuild'
+            });
+          }
+        }
+        const featuredCount = fixtures.filter(m=> FEATURED_LEAGUE_IDS.has(m.league.id)).length;
+        const dayKey = `daily:${date}:predictions`;
+        const aggregate = {
+          date,
+          generatedAt: new Date().toISOString(),
+          totalMatches: fixtures.length,
+          featuredMatches: featuredCount,
+          processed: predictions.length,
+          failures: 0,
+          usingFallbackAllMatches: featuredCount === 0,
+          fetchMode: featuredOnly ? 'featured-only' : 'global',
+          model: modelVersion,
+          resume: false,
+          waveSizeApplied: null,
+          remainingAfterWave: Math.max(0, featuredCount - predictions.length),
+          newlyGenerated: predictions.length,
+          predictions
+        };
+        await env.PREDICTIONS_KV.put(dayKey, JSON.stringify(aggregate));
+        return new Response(JSON.stringify({ rebuilt: true, date, processed: predictions.length, total: fixtures.length, featuredMatches: featuredCount }), { headers: { 'Content-Type':'application/json', ...cors }});
+      } catch (e) {
+        return new Response(JSON.stringify({ error: 'rebuild-failed', message: e.message }), { status: 500, headers: { 'Content-Type':'application/json', ...cors }});
       }
     }
     
@@ -478,7 +562,7 @@ async function fetchFeaturedLeagueFixtures(dateStr, env) {
 /**
  * Trigger prediction generation directly in Worker
  */
-async function triggerPredictionUpdate(env, force = false, featuredOnly = false, dateOverride = null) {
+async function triggerPredictionUpdate(env, force = false, featuredOnly = false, dateOverride = null, options = {}) {
   console.log('🤖 Triggering prediction update...');
   
   try {
@@ -492,6 +576,8 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
     }
     console.log(`📆 Using date ${targetDate} (override=${!!dateOverride})`);
     
+    const { resume = false, waveSize = null } = options;
+
     // Fetch matches for target date
     let allMatches = [];
     if (featuredOnly) {
@@ -517,18 +603,22 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
       return { message: 'No matches found for target date', date: targetDate, processedPredictions: 0 };
     }
     
-    // Idempotency (Feature C): if daily aggregate already exists and not forced, skip generation
+    // Idempotency (Feature C) with resume support:
     const todayStr = targetDate; // use target date for idempotency key
-    if (env.PREDICTIONS_KV && !force) {
+    let existingDailyObj = null;
+    if (env.PREDICTIONS_KV) {
       try {
-        const existingDaily = await env.PREDICTIONS_KV.get(`daily:${todayStr}:predictions`);
-        if (existingDaily) {
-          console.log('⏭️  Skipping prediction generation (daily aggregate exists). Use ?force=true to override.');
-          return { skipped: true, reason: 'already-generated', date: todayStr };
+        const existingDailyRaw = await env.PREDICTIONS_KV.get(`daily:${todayStr}:predictions`);
+        if (existingDailyRaw) {
+          existingDailyObj = JSON.parse(existingDailyRaw);
         }
       } catch (e) {
-        console.warn('Idempotency check failed, proceeding:', e.message);
+        console.warn('Daily aggregate read failed (continuing):', e.message);
       }
+    }
+    if (existingDailyObj && !force && !resume) {
+      console.log('⏭️  Skipping prediction generation (daily aggregate exists and no force/resume).');
+      return { skipped: true, reason: 'already-generated', date: todayStr, existingProcessed: existingDailyObj.processed };
     }
 
     // Partition: total matches vs featured matches
@@ -539,21 +629,56 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
       } catch { return false; }
     });
 
-    const matchesToPredict = featuredMatches.length > 0 ? featuredMatches : allMatches.slice(0, 25); // fallback safeguard
+    let matchesToPredict = featuredMatches.length > 0 ? featuredMatches : allMatches.slice(0, 25); // fallback safeguard
+
+    // For resume mode, filter out already predicted fixture IDs from existing daily aggregate
+    if (resume && existingDailyObj && Array.isArray(existingDailyObj.predictions)) {
+      const predictedSet = new Set(existingDailyObj.predictions.map(p => p.matchId));
+      const before = matchesToPredict.length;
+      matchesToPredict = matchesToPredict.filter(m => !predictedSet.has(m.fixture.id));
+      console.log(`🔁 Resume mode: ${before - matchesToPredict.length} already predicted skipped; remaining ${matchesToPredict.length}`);
+    }
+
+    // Apply wave size (limit batch for this invocation)
+    let remainingAfterWave = 0;
+    if (waveSize && matchesToPredict.length > waveSize) {
+      remainingAfterWave = matchesToPredict.length - waveSize;
+      matchesToPredict = matchesToPredict.slice(0, waveSize);
+      console.log(`🌊 Wave processing: limiting to ${waveSize} this run; ${remainingAfterWave} will remain`);
+    }
     const featuredCount = featuredMatches.length;
     console.log(`🎯 Featured filter summary: featured=${featuredCount} totalFetched=${totalMatches} using=${matchesToPredict.length} mode=${featuredOnly ? 'featured-only-fetch' : 'global-fetch-filter'}`);
-    const predictions = [];
-    const failures = [];
+  const predictions = [];
+  const failures = [];
+  let adaptiveDelayMs = 500; // dynamic delay grows on rate limits
 
-    // Concurrency control to avoid hammering Gemini API
-    const MAX_CONCURRENT = 4; // tune if needed
-    for (let i = 0; i < matchesToPredict.length; i += MAX_CONCURRENT) {
-      const batch = matchesToPredict.slice(i, i + MAX_CONCURRENT);
-      console.log(`🚀 Processing batch ${Math.floor(i / MAX_CONCURRENT) + 1} (${batch.length} matches)`);
+    // Dynamic concurrency + circuit breaker
+    let dynamicConcurrency = force ? 1 : 3; // start conservative
+    const MIN_CONCURRENCY = 1;
+    const MAX_CONCURRENCY = 4;
+    let consecutiveRateLimit = 0;
+    const RATE_LIMIT_BREAK = 5; // threshold for long pause
+    const LONG_BACKOFF_MS = 90000; // 90s
+    for (let i = 0; i < matchesToPredict.length; i += dynamicConcurrency) {
+      // Manual pause support (set KV key daily:<date>:pause-until to ISO timestamp)
+      if (env.PREDICTIONS_KV) {
+        try {
+          const pauseUntilStr = await env.PREDICTIONS_KV.get(`daily:${todayStr}:pause-until`);
+          if (pauseUntilStr) {
+            const pauseUntil = Date.parse(pauseUntilStr);
+            if (!isNaN(pauseUntil) && Date.now() < pauseUntil) {
+              console.log(`⏸ Paused until ${pauseUntilStr}`);
+              break;
+            }
+          }
+        } catch {}
+      }
+      const batch = matchesToPredict.slice(i, i + dynamicConcurrency);
+      console.log(`🚀 Processing batch ${Math.floor(i / dynamicConcurrency) + 1} (${batch.length} matches) concurrency=${dynamicConcurrency}`);
       const batchResults = await Promise.all(batch.map(async match => {
         try {
           console.log(`🎯 Generating prediction for: ${match.teams.home.name} vs ${match.teams.away.name}`);
-          const prediction = await generatePrediction(match, env);
+          const { prediction, attempts } = await generatePredictionWithRetry(match, env, { maxAttempts: 5, baseDelayMs: 400 });
           return {
             success: true,
             record: {
@@ -570,7 +695,8 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
               prediction,
               timestamp: new Date().toISOString(),
               automated: true,
-              source: 'worker-cron'
+              source: resume ? 'worker-cron-resume' : 'worker-cron',
+              attempts
             }
           };
         } catch (predError) {
@@ -582,14 +708,66 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
       for (const r of batchResults) {
         if (r.success) predictions.push(r.record); else failures.push(r);
       }
+      // Adaptive delay, dynamic concurrency & circuit breaker
+      const hadRetry = batchResults.some(r => r.success && r.record.attempts && r.record.attempts > 1);
+      const rateLimitFailures = batchResults.filter(r => !r.success && /429|subrequest|rate/i.test(r.error||''));
+      if (rateLimitFailures.length === batch.length) {
+        consecutiveRateLimit += rateLimitFailures.length;
+      } else if (rateLimitFailures.length) {
+        consecutiveRateLimit += rateLimitFailures.length;
+      } else {
+        consecutiveRateLimit = 0;
+      }
+      if (consecutiveRateLimit >= RATE_LIMIT_BREAK) {
+        console.log(`🛑 Circuit breaker: ${consecutiveRateLimit} consecutive rate-limit errors. Sleeping ${LONG_BACKOFF_MS}ms`);
+        if (env.PREDICTIONS_KV) {
+          try { await updateDailyProgress(env.PREDICTIONS_KV, todayStr, { circuitBreaker: true, pauseMs: LONG_BACKOFF_MS, lastBatchAt: new Date().toISOString() }); } catch {}
+        }
+        await sleep(LONG_BACKOFF_MS);
+        adaptiveDelayMs = Math.min(adaptiveDelayMs + 1000, 7000);
+        dynamicConcurrency = Math.max(MIN_CONCURRENCY, dynamicConcurrency - 1);
+        consecutiveRateLimit = 0; // reset after long pause
+      } else if (hadRetry || rateLimitFailures.length) {
+        adaptiveDelayMs = Math.min(Math.floor(adaptiveDelayMs * 1.5 + 300), 6000);
+        dynamicConcurrency = Math.max(MIN_CONCURRENCY, dynamicConcurrency - 1);
+        console.log(`⛔ Rate pressure: delay=${adaptiveDelayMs}ms concurrency=${dynamicConcurrency}`);
+      } else {
+        // clean batch: consider gentle scale up & decay delay
+        if (adaptiveDelayMs > 700) adaptiveDelayMs = Math.max(500, Math.floor(adaptiveDelayMs * 0.85));
+        if (dynamicConcurrency < MAX_CONCURRENCY) dynamicConcurrency++;
+      }
+      if (env.PREDICTIONS_KV) {
+        try {
+          await updateDailyProgress(env.PREDICTIONS_KV, todayStr, {
+            date: todayStr,
+            totalMatches,
+            featuredMatches: featuredCount,
+            predicted: (existingDailyObj && resume ? (existingDailyObj.predictions?.length||0) : 0) + predictions.length,
+            remaining: matchesToPredict.length - predictions.length,
+            failures: failures.length,
+            waveSizeApplied: waveSize || null,
+            resume,
+            fetchMode: featuredOnly ? 'featured-only' : 'global',
+            adaptiveDelayMs,
+            dynamicConcurrency,
+            consecutiveRateLimit,
+            lastBatchAt: new Date().toISOString(),
+            done: (i + dynamicConcurrency) >= matchesToPredict.length
+          });
+        } catch (e) { console.warn('Progress update failed:', e.message); }
+      }
+      if (i + dynamicConcurrency < matchesToPredict.length) {
+        await sleep(adaptiveDelayMs);
+      }
     }
 
     console.log(`✅ Generated ${predictions.length}/${totalMatches} predictions (${failures.length} failures)`);
   // Persist predictions if KV available
     if (env.PREDICTIONS_KV) {
       try {
-        const modelVersion = 'gemini-2.5-flash';
-  const dataVersion = todayStr; // align with target date
+        const dataVersion = todayStr; // align with target date
+        const usedModelsSet = new Set(predictions.map(p=>p.modelUsed || p.prediction?.model || 'gemini-2.5-flash'));
+        const aggregateModel = usedModelsSet.size === 1 ? Array.from(usedModelsSet)[0] : 'mixed';
         const recentKey = 'recent_predictions';
         let recentList = [];
         try {
@@ -598,51 +776,74 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
         } catch {}
 
         for (const p of predictions) {
-          const fixtureId = p.matchId;
-          const legacyKey = `prediction:${fixtureId}`; // legacy pattern
-          const structuredKey = `pred:${fixtureId}:${modelVersion}:${dataVersion}`;
-          const record = {
-            numeric_predictions: p.prediction, // align with retrieval expectations
-            reasoning_notes: p.prediction?.analysis || '',
-            meta: {
-              fixture_id: fixtureId,
-              league_id: p.leagueId || '',
-              season: p.season || '',
-              cache_key: structuredKey,
-              model_version: modelVersion,
-              data_version: dataVersion,
-              last_updated: p.timestamp,
-              stale: false,
-              source: 'cron-worker'
-            }
-          };
-          // Store both keys (compat + new)
-          await env.PREDICTIONS_KV.put(structuredKey, JSON.stringify(record));
-          await env.PREDICTIONS_KV.put(legacyKey, JSON.stringify({
-            prediction: p.prediction,
-            predictionTime: p.timestamp,
-            league: p.leagueId || ''
-          }));
-          recentList.unshift({ matchId: fixtureId, ts: p.timestamp });
+          try {
+            const fixtureId = p.matchId;
+            const legacyKey = `prediction:${fixtureId}`; // legacy pattern
+            const modelUsed = p.modelUsed || p.prediction?.model || 'gemini-2.5-flash';
+            const structuredKey = `pred:${fixtureId}:${modelUsed}:${dataVersion}`;
+            const record = {
+              numeric_predictions: p.prediction, // align with retrieval expectations
+              reasoning_notes: p.prediction?.analysis || '',
+              meta: {
+                fixture_id: fixtureId,
+                league_id: p.leagueId || '',
+                season: p.season || '',
+                cache_key: structuredKey,
+                model_version: modelUsed,
+                data_version: dataVersion,
+                last_updated: p.timestamp,
+                stale: false,
+                source: p.source
+              }
+            };
+            // Store both keys (compat + new)
+            await env.PREDICTIONS_KV.put(structuredKey, JSON.stringify(record));
+            await env.PREDICTIONS_KV.put(legacyKey, JSON.stringify({
+              prediction: p.prediction,
+              predictionTime: p.timestamp,
+              league: p.leagueId || ''
+            }));
+            recentList.unshift({ matchId: fixtureId, ts: p.timestamp });
+          } catch (storeErr) {
+            console.warn('Prediction store failed (continuing):', storeErr.message);
+          }
         }
         recentList = recentList.slice(0,50);
         await env.PREDICTIONS_KV.put(recentKey, JSON.stringify(recentList));
 
-        // Daily aggregate key
-    const dayKey = `daily:${dataVersion}:predictions`; 
-        await env.PREDICTIONS_KV.put(dayKey, JSON.stringify({
+        // Daily aggregate key with resume merge logic
+        const dayKey = `daily:${dataVersion}:predictions`; 
+        let finalPredictionsList = predictions;
+        let baseObj = existingDailyObj || {};
+        if (resume && existingDailyObj && Array.isArray(existingDailyObj.predictions)) {
+          const merged = new Map();
+            for (const oldP of existingDailyObj.predictions) merged.set(oldP.matchId, oldP);
+            for (const newP of predictions) merged.set(newP.matchId, newP);
+          finalPredictionsList = Array.from(merged.values());
+        }
+        // If no new predictions were generated in this wave AND we had existing ones, avoid overwriting with empty
+        if (predictions.length === 0 && existingDailyObj && Array.isArray(existingDailyObj.predictions) && existingDailyObj.predictions.length > 0) {
+          console.log('⚠️ No new predictions this wave; preserving existing aggregate predictions list.');
+          finalPredictionsList = existingDailyObj.predictions;
+        }
+        const aggregateObj = {
           date: dataVersion,
           generatedAt: new Date().toISOString(),
-      totalMatches,
-            featuredMatches: featuredCount,
-            processed: predictions.length,
-            failures: failures.length,
-            usingFallbackAllMatches: featuredCount === 0,
-      fetchMode: featuredOnly ? 'featured-only' : 'global',
-            model: modelVersion,
-            predictions
-        }));
-        console.log(`💾 Stored ${predictions.length} predictions in KV (daily aggregate + per-fixture)`);
+          totalMatches: baseObj.totalMatches || totalMatches,
+          featuredMatches: featuredCount,
+          processed: finalPredictionsList.length,
+          failures: failures.length + (baseObj.failures || 0),
+          usingFallbackAllMatches: featuredCount === 0,
+          fetchMode: featuredOnly ? 'featured-only' : 'global',
+          model: aggregateModel,
+          resume,
+          waveSizeApplied: waveSize || null,
+          remainingAfterWave,
+          newlyGenerated: predictions.length,
+          predictions: finalPredictionsList
+        };
+        await env.PREDICTIONS_KV.put(dayKey, JSON.stringify(aggregateObj));
+        console.log(`💾 Stored aggregate: totalPredictions=${finalPredictionsList.length} (new ${predictions.length}, resume=${resume})`);
         // Feature D (Cache warming placeholder): Could call a Pages endpoint to prime caches
         if (env.FIXTURECAST_DOMAIN) {
           ctx.waitUntil(fetch(`${env.FIXTURECAST_DOMAIN}/api/cache/predictions-warm`, { method: 'POST' }).catch(()=>{}));
@@ -654,6 +855,8 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
       console.log('ℹ️ PREDICTIONS_KV binding not present; skipping persistence');
     }
 
+    const usedModelsSetReturn = new Set(predictions.map(p=>p.modelUsed || p.prediction?.model || 'gemini-2.5-flash'));
+    const aggregateModelReturn = usedModelsSetReturn.size === 1 ? Array.from(usedModelsSetReturn)[0] : 'mixed';
     return {
       message: `Generated ${predictions.length} predictions (failures: ${failures.length})`,
       processedPredictions: predictions.length,
@@ -663,8 +866,13 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
       fetchMode: featuredOnly ? 'featured-only' : 'global',
       failures,
       persisted: !!env.PREDICTIONS_KV,
-      predictions,
-      date: todayStr
+      predictions: predictions.map(p => ({ matchId: p.matchId, leagueId: p.leagueId, homeTeam: p.homeTeam, awayTeam: p.awayTeam })),
+      date: todayStr,
+      resume,
+      waveSizeApplied: waveSize || null,
+      remainingAfterWave,
+      adaptiveDelayMs,
+      model: aggregateModelReturn
     };
     
   } catch (error) {
@@ -733,6 +941,30 @@ Focus on tactical analysis, recent form, and key factors.`;
     console.error('Gemini API error:', error);
     throw error;
   }
+}
+
+// Wrapper with retry & exponential backoff for Gemini calls
+async function generatePredictionWithRetry(match, env, { maxAttempts = 5, baseDelayMs = 300 } = {}) {
+  let attempt = 0;
+  let lastErr;
+  while (attempt < maxAttempts) {
+    attempt++;
+    try {
+      const prediction = await generatePrediction(match, env);
+      return { prediction, attempts: attempt };
+    } catch (e) {
+      lastErr = e;
+      const msg = (e && e.message) ? e.message.toLowerCase() : '';
+      const retriable = msg.includes('429') || msg.includes('rate') || msg.includes('subrequest');
+      if (!retriable || attempt === maxAttempts) {
+        throw e;
+      }
+      const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 150);
+      console.log(`⏳ Retry ${attempt}/${maxAttempts} after ${delay}ms (reason: ${e.message})`);
+      await sleep(delay);
+    }
+  }
+  throw lastErr; // safety
 }
 
 /**
@@ -1087,4 +1319,21 @@ function aggregateByLeague(fixtures) {
     map.get(lid).count += 1;
   }
   return Array.from(map.values()).sort((a,b)=>b.count-a.count).slice(0,100);
+}
+
+// Sleep helper (ms)
+function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+// Update progress key
+async function updateDailyProgress(kv, date, progress) {
+  try { await kv.put(`daily:${date}:progress`, JSON.stringify(progress)); } catch (e) { console.warn('Progress KV put failed:', e.message); }
+}
+// Fetch fixtures helper for endpoints (featured or global)
+async function fetchFixturesForDate(dateStr, env, featuredOnly) {
+  if (featuredOnly) return await fetchFeaturedLeagueFixtures(dateStr, env);
+  try {
+    const r = await fetch(`https://v3.football.api-sports.io/fixtures?date=${dateStr}`, { headers: { 'x-apisports-key': env.FOOTBALL_API_KEY }});
+    if (!r.ok) return [];
+    const j = await r.json();
+    return j.response || [];
+  } catch { return []; }
 }
