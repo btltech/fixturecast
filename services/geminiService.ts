@@ -127,8 +127,9 @@ CONTEXT (provided)
 ${contextPrompt}
 
 OUTPUT FORMAT
-- Return ONLY JSON per the provided response schema (no extra keys, no Markdown, no prose outside JSON). Then, after the JSON, provide concise reasoning notes sections (plain text), as described.
-- However, you MUST serialize the JSON to match the response schema supplied by the system (do not invent fields). If some inputs are not available, still produce calibrated outputs and reflect uncertainty.
+-- The JSON output MUST always include a "keyFactors" array (even if empty or containing uncertainty notes). This is required for downstream analysis and display. If analysis is limited by token budget or missing data, include a placeholder keyFactors entry explaining the limitation.
+-- Return ONLY JSON per the provided response schema (no extra keys, no Markdown, no prose outside JSON). Then, after the JSON, provide concise reasoning notes sections (plain text), as described.
+-- You MUST serialize the JSON to match the response schema supplied by the system (do not invent fields). If some inputs are not available, still produce calibrated outputs and reflect uncertainty.
 `;
 
     // Generate AI prediction with rate limiting and retry
@@ -155,10 +156,29 @@ OUTPUT FORMAT
 
         throw new Error(`Gemini proxy error (${r.status}): ${coreMsg}`);
       }
-      return r.json();
+      let data;
+      try {
+        data = await r.json();
+      } catch (jsonError) {
+        console.error('❌ Invalid JSON response from Gemini API:', jsonError);
+        const responseText = await r.text();
+        console.error('Raw Gemini response:', responseText.substring(0, 500));
+        throw new Error(`Invalid JSON response from Gemini API: ${jsonError.message}`);
+      }
+      return data;
     }, GEMINI_RETRY + 1);
 
     const predictionData = response.prediction || response;
+
+    // Guarantee keyFactors is always present (never undefined)
+    if (!Array.isArray(predictionData.keyFactors)) {
+      predictionData.keyFactors = [
+        {
+          category: 'Uncertainty',
+          points: ['Key Factors Analysis was limited or missing in model output. This may be due to token budget, missing context, or degraded model response.']
+        }
+      ];
+    }
 
     // Normalize probabilities to ensure they sum to 100
     const totalProb = predictionData.homeWinProbability + predictionData.drawProbability + predictionData.awayWinProbability;
