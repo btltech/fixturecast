@@ -195,14 +195,40 @@ OUTPUT FORMAT
 
     const predictionData = response.prediction || response;
 
-    // Guarantee keyFactors is always present (never undefined)
-    if (!Array.isArray(predictionData.keyFactors)) {
+    // Guarantee keyFactors is always present and populated (never undefined or empty)
+    if (!Array.isArray(predictionData.keyFactors) || predictionData.keyFactors.length === 0) {
       predictionData.keyFactors = [
         {
           category: 'Uncertainty',
           points: ['Key Factors Analysis was limited or missing in model output. This may be due to token budget, missing context, or degraded model response.']
         }
       ];
+    } else {
+      // Check each keyFactor and ensure points are not empty
+      predictionData.keyFactors = predictionData.keyFactors.map((factor: any) => {
+        if (!Array.isArray(factor.points) || factor.points.length === 0 || factor.points.every((point: string) => !point || point.trim() === '')) {
+          return {
+            category: factor.category || 'Analysis',
+            points: [`Analysis for ${factor.category || 'this area'} was not provided in the model response. This may indicate insufficient data or model limitations.`]
+          };
+        }
+        return factor;
+      });
+      
+      // Remove any keyFactors that still have issues
+      predictionData.keyFactors = predictionData.keyFactors.filter((factor: any) => 
+        factor.category && Array.isArray(factor.points) && factor.points.length > 0
+      );
+      
+      // If after cleaning we have no valid keyFactors, add fallback
+      if (predictionData.keyFactors.length === 0) {
+        predictionData.keyFactors = [
+          {
+            category: 'Limited Analysis',
+            points: ['Detailed key factors analysis was not generated. This may be due to model limitations or insufficient context data.']
+          }
+        ];
+      }
     }
 
     // Normalize probabilities to ensure they sum to 100

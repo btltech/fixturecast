@@ -72,14 +72,40 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ error: 'Failed to parse model JSON', raw: raw.slice(0,500) }), { status: 502, headers: { ...cors, 'Content-Type':'application/json' } });
     }
 
-    // Guarantee keyFactors is always present (never undefined)
-    if (!Array.isArray(parsed.keyFactors)) {
+    // Guarantee keyFactors is always present and populated (never undefined or empty)
+    if (!Array.isArray(parsed.keyFactors) || parsed.keyFactors.length === 0) {
       parsed.keyFactors = [
         {
           category: 'Uncertainty',
           points: ['Key Factors Analysis was limited or missing in model output. This may be due to token budget, missing context, or degraded model response.']
         }
       ];
+    } else {
+      // Check each keyFactor and ensure points are not empty
+      parsed.keyFactors = parsed.keyFactors.map(factor => {
+        if (!Array.isArray(factor.points) || factor.points.length === 0 || factor.points.every(point => !point || point.trim() === '')) {
+          return {
+            category: factor.category || 'Analysis',
+            points: [`Analysis for ${factor.category || 'this area'} was not provided in the model response. This may indicate insufficient data or model limitations.`]
+          };
+        }
+        return factor;
+      });
+      
+      // Remove any keyFactors that still have issues
+      parsed.keyFactors = parsed.keyFactors.filter(factor => 
+        factor.category && Array.isArray(factor.points) && factor.points.length > 0
+      );
+      
+      // If after cleaning we have no valid keyFactors, add fallback
+      if (parsed.keyFactors.length === 0) {
+        parsed.keyFactors = [
+          {
+            category: 'Limited Analysis',
+            points: ['Detailed key factors analysis was not generated. This may be due to model limitations or insufficient context data.']
+          }
+        ];
+      }
     }
 
     normalizeProbabilities(parsed);
@@ -127,15 +153,26 @@ Consider these advanced metrics:
 - Fixture congestion effects on performance
 
 OUTPUT FORMAT REQUIREMENTS
-Return a JSON object with ALL required fields:
+Return a JSON object with ALL required fields. Each field must be fully populated:
+
 - homeWinProbability: integer 0-100 (based on sophisticated modeling, not gut feeling)
 - drawProbability: integer 0-100  
 - awayWinProbability: integer 0-100
 - predictedScoreline: string (most likely outcome from Monte Carlo analysis)
 - confidence: string ("High", "Medium", or "Low" based on data quality and model agreement)
-- keyFactors: MANDATORY detailed array with categories like "Form Analysis", "Tactical Matchup", "Key Players", "Historical Trends", "Conditions", etc.
+- keyFactors: MANDATORY detailed array. Each object MUST have:
+  * "category": string (e.g., "Form Analysis", "Tactical Matchup", "Key Players", "Historical Trends")  
+  * "points": array of strings with SPECIFIC analysis points (NOT empty, NOT generic)
+  
+CRITICAL: keyFactors "points" arrays must contain specific, actionable insights like:
+  - "Arsenal averages 2.1 goals at home vs Chelsea's 0.8 away defensive record"
+  - "Forest's injury to key striker reduces their scoring threat by 35%"
+  - "Head-to-head shows 7 of last 10 meetings had under 2.5 goals"
+  
 - goalLine: object with "line" (typically 2.5), "overProbability", "underProbability"
 - btts: object with "yesProbability", "noProbability" based on attack/defense rates
+
+Do NOT return empty points arrays or vague statements. Every keyFactor must provide specific, data-driven insights.
 
 Apply rigorous statistical thinking. Consider base rates, regression to the mean, sample sizes, and uncertainty. Provide probabilities that reflect genuine analytical confidence, not artificial precision.
 
