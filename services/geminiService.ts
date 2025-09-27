@@ -7,6 +7,7 @@ import { calculatePredictionConfidence } from './confidenceService';
 import { storeDailyPrediction } from './accuracyService';
 import { withRateLimit } from './rateLimitService';
 import { advancedAnalyticsService } from './advancedAnalyticsService';
+import { realTimeDataService } from './realTimeDataService';
 
 const GEMINI_RETRY = 2; // kept for potential retry logic of proxy failures
 const PROXY_ENDPOINT = '/api/ai/gemini/predict';
@@ -65,10 +66,17 @@ export const getMatchPrediction = async (match: Match, context?: PredictionConte
     const advancedAnalytics = await advancedAnalyticsService.generateAdvancedAnalytics(match);
     const analyticsContext = advancedAnalyticsService.formatAnalyticsForPrompt(advancedAnalytics);
 
+    // Gather comprehensive real-time data for maximum accuracy
+    console.log('🔍 Gathering enhanced real-time data for improved prediction accuracy...');
+    const realTimeContext = await realTimeDataService.gatherEnhancedContext(match, context);
+    const realTimePrompt = realTimeDataService.formatForPrompt(realTimeContext);
+
     // Debug logging to see what context is being built
     console.log(`🔍 Context debug for ${match.homeTeam} vs ${match.awayTeam}:`, {
       hasContext: !!context,
       hasAdvancedAnalytics: !!advancedAnalytics,
+      hasRealTimeData: realTimeContext.dataQuality.overall > 50,
+      dataQualityScore: realTimeContext.dataQuality.overall,
       leagueTableSnippet: context?.leagueTableSnippet || 'None',
       homeTeamFormSnippet: context?.homeTeamFormSnippet || 'None',
       awayTeamFormSnippet: context?.awayTeamFormSnippet || 'None',
@@ -92,55 +100,70 @@ export const getMatchPrediction = async (match: Match, context?: PredictionConte
       ${context.awayTeamInjuriesSnippet ? `\n- ${match.awayTeam} Injuries: ${context.awayTeamInjuriesSnippet}` : ''}
       
       ${analyticsContext}
-    ` : analyticsContext;
+      ${realTimePrompt}
+    ` : `${analyticsContext}${realTimePrompt}`;
     
     console.log(`📝 Generated enhanced context prompt:`, contextPrompt || 'No context data available');
     
     const prompt = `
 You are a football prediction engine that generates detailed, on-demand predictions for a single, user-selected fixture inside the "My Teams" tab. This must never run automatically.
 
+REAL-TIME DATA INTEGRATION PRIORITY
+- Leverage comprehensive real-time data from API-Football including: live team statistics, injury/suspension updates, recent form analysis, head-to-head trends, venue-specific performance, motivation factors, and contextual match pressures
+- Prioritize real-time data over historical averages when available (indicated by data quality scores)
+- Adjust prediction confidence based on data freshness and completeness
+- Weight recent performances more heavily than season averages for teams showing clear momentum shifts
+- Factor in key player absences with position-specific impact calculations
+
 DATA SOURCE POLICY
 - Use API-Football ONLY for all real-time and historical data (fixtures, teams, standings, stats, H2H, injuries/suspensions, lineups, venues, schedules). Do not use any other data source. Do not infer unavailable data.
 - All timestamps in outputs must map to the API-Football fixture timestamp and season identifiers when available in context. If missing, mark as Not available and degrade confidence.
+- When enhanced real-time data is available (quality score >70%), prioritize it over basic context snippets
 
-INPUTS (from API-Football)
-- Competition/season identifiers, fixture (home/away, venue), recent form (last 5–10 matches with recency weighting), head-to-head (wins/draws, BTTS), team stats (goals, xG/xGA, shots, possession, discipline, corners), squad status (injuries/suspensions), context (rest days, congestion, travel/time zone, venue/weather if present).
+ENHANCED REAL-TIME INPUTS (from API-Football + Analysis)
+- **Live Team Performance**: Attack/defense strength ratings, xG differentials, recent goal trends, venue-specific form
+- **Squad Status Intelligence**: Key player availability, positional impact scores, tactical formation changes due to absences
+- **Momentum Analysis**: Weighted recent form with exponential decay, streak analysis, psychological factors
+- **Advanced H2H Analytics**: Goal variance patterns, BTTS trends, venue-specific historical performance, recent encounter context
+- **Contextual Factors**: Rest days analysis, fixture congestion impact, motivation assessment, pressure situations
+- **Data Quality Metrics**: Real-time assessment of prediction confidence based on data completeness and freshness
 
-ADVANCED MODELING (Enhanced Ensemble)
-- ELO/Glicko rating system baseline with dynamic adjustments
-- Monte Carlo simulation for scoreline probabilities based on adjusted attack/defense rates  
-- Temporal neural networks for form momentum with exponential decay (0.9^days_ago weighting)
-- Market efficiency analysis: compare to betting odds when available to detect value
-- Bayesian hierarchical modeling for league-specific effects and uncertainty quantification
-- Weather impact modeling for outdoor matches (wind, rain, temperature effects on gameplay)
-- Referee tendency analysis (cards, penalties, advantage play style)
+ADVANCED MODELING (Enhanced Ensemble with Real-Time Integration)
+- **Dynamic ELO System**: Real-time rating adjustments based on recent results, injury impacts, and momentum shifts
+- **Monte Carlo Simulation**: Enhanced with real-time player availability and tactical adjustment factors
+- **Form-Weighted Neural Networks**: Exponential decay weighting (0.9^days_ago) with injury impact modifiers
+- **Market Efficiency Analysis**: Compare to betting odds when available, detect value opportunities
+- **Bayesian Hierarchical Modeling**: League-specific effects with real-time parameter updates
+- **Injury Impact Modeling**: Position-specific absence effects on team performance metrics
+- **Venue Intelligence**: Home advantage calculations with weather, crowd, and travel factors
 
-ENHANCED FEATURE ENGINEERING  
-- **Performance Metrics**: Goals per game, xG per game, shots on target %, possession effectiveness
-- **Defensive Strength**: Clean sheets, goals conceded per game, defensive actions per game
-- **Form Analysis**: Weighted recent form (last 6 matches), home/away split performance
-- **Matchup Analysis**: Style compatibility (possession vs counter-attack), pace differential
-- **Squad Rotation**: Fatigue modeling based on minutes played in last 14 days
-- **Psychological Factors**: Pressure situations (relegation battle, European qualification, derbies)
-- **Seasonal Trends**: Performance by month, fixture congestion impact, winter break effects
+ENHANCED FEATURE ENGINEERING WITH REAL-TIME DATA
+- **Performance Metrics**: Real-time attack/defense strength, momentum-adjusted xG, shot conversion trends
+- **Defensive Intelligence**: Live clean sheet probability, defensive fragility under pressure
+- **Form Dynamics**: Weighted form analysis with recency bias, confidence intervals
+- **Matchup Intelligence**: Style compatibility analysis, pace differential impacts
+- **Squad Rotation Intelligence**: Fatigue modeling, key player dependency analysis
+- **Psychological Profiling**: Pressure situation performance, momentum psychology, derby effects
+- **Seasonal Context**: Performance by month, fixture congestion effects, squad depth utilization
 
-ENHANCED PIPELINE
-1) **Data Quality Assessment**: Score available data richness (0-100) and adjust confidence accordingly
-2) **Multi-Model Generation**: 
-   - ELO-based probability baseline
-   - Monte Carlo scoreline simulation (1000+ iterations)
-   - Form momentum neural modeling with attention mechanisms
-   - Market efficiency comparison when odds available
-   - Bayesian uncertainty quantification
-3) **Ensemble Weighting**: Dynamic model weights based on historical accuracy for similar matchups
-4) **Probability Calibration**: Isotonic regression to ensure well-calibrated probabilities
-5) **Confidence Scoring**: Multi-factor confidence based on data quality, model agreement, historical accuracy
-6) **Risk Assessment**: Identify high-variance scenarios (cup matches, relegation battles, injury-depleted squads)
-7) **Market Coverage**: Enhanced markets with correlations (Asian handicaps, exact scorelines, goalscorer props)
+ENHANCED PIPELINE WITH REAL-TIME PRIORITY
+1) **Real-Time Data Assessment**: Evaluate data quality score and adjust modeling approach accordingly
+2) **Multi-Model Generation with Live Weights**: 
+   - ELO-based probability baseline with real-time adjustments
+   - Monte Carlo simulation with injury/suspension factors
+   - Form momentum analysis with psychological weighting
+   - Market efficiency comparison with live odds integration
+   - Bayesian uncertainty quantification with data quality factors
+3) **Dynamic Ensemble Weighting**: Adjust model weights based on real-time data availability and quality
+4) **Real-Time Probability Calibration**: Isotonic regression with recency weighting
+5) **Adaptive Confidence Scoring**: Multi-factor confidence adjusted by data freshness and completeness
+6) **Live Risk Assessment**: Dynamic variance modeling for high-uncertainty scenarios
+7) **Enhanced Market Coverage**: Real-time correlation analysis for secondary markets
 
 POST-PROCESSING RULES
 - Normalize every probability set to 100% (1X2, BTTS, O/U, HT/FT). Ensure Poisson scoreline probabilities integrate to 1 and are consistent with expected goals and outcome probabilities. Round sensibly while maintaining normalization.
-- Degrade gracefully with sparse or missing inputs: widen distributions and lower confidence; explicitly state uncertainty drivers in reasoning.
+- **Real-Time Confidence Adjustment**: Degrade gracefully with sparse or missing real-time inputs. When data quality <50%, increase uncertainty bands by 15-25% and explicitly state data limitations.
+- **Dynamic Key Factors**: Prioritize real-time insights (injuries, form, momentum) over static analysis when quality score >70%
 
 MATCH
 - League: ${match.league}
@@ -152,7 +175,8 @@ CONTEXT (provided)
 ${contextPrompt}
 
 OUTPUT FORMAT
--- The JSON output MUST always include a "keyFactors" array (even if empty or containing uncertainty notes). This is required for downstream analysis and display. If analysis is limited by token budget or missing data, include a placeholder keyFactors entry explaining the limitation.
+-- The JSON output MUST always include a "keyFactors" array with real-time insights prioritized when available. Include data quality assessment in reasoning.
+-- When real-time data quality >70%, emphasize live analysis (injuries, momentum, recent form). When <50%, note data limitations and increase uncertainty.
 -- Return ONLY JSON per the provided response schema (no extra keys, no Markdown, no prose outside JSON). Then, after the JSON, provide concise reasoning notes sections (plain text), as described.
 -- You MUST serialize the JSON to match the response schema supplied by the system (do not invent fields). If some inputs are not available, still produce calibrated outputs and reflect uncertainty.
 `;
