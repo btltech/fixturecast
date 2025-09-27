@@ -72,6 +72,16 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ error: 'Failed to parse model JSON', raw: raw.slice(0,500) }), { status: 502, headers: { ...cors, 'Content-Type':'application/json' } });
     }
 
+    // Guarantee keyFactors is always present (never undefined)
+    if (!Array.isArray(parsed.keyFactors)) {
+      parsed.keyFactors = [
+        {
+          category: 'Uncertainty',
+          points: ['Key Factors Analysis was limited or missing in model output. This may be due to token budget, missing context, or degraded model response.']
+        }
+      ];
+    }
+
     normalizeProbabilities(parsed);
     const duration = Date.now() - start;
 
@@ -82,9 +92,32 @@ export async function onRequest(context) {
 }
 
 function buildPrompt(match, ctx) {
-  const base = `Generate JSON only with probabilities (0-100 integers) for a football match prediction.\nMatch: ${match.homeTeam} vs ${match.awayTeam}\nLeague: ${match.league || 'Unknown'}\nDate: ${match.date}\n`;
-  const context = ctx ? `Context:\n${Object.entries(ctx).map(([k,v])=>`- ${k}: ${typeof v==='string'?v:JSON.stringify(v)}`).join('\n')}` : '';
-  return `${base}${context}\nReturn JSON object with keys: homeWinProbability, drawProbability, awayWinProbability, predictedScoreline, confidence, keyFactors (array), goalLine (object with line, overProbability, underProbability), btts (yesProbability,noProbability).`;
+  const base = `You are a football prediction engine that generates detailed predictions. Generate JSON output with complete analysis including mandatory Key Factors Analysis.
+
+MATCH DETAILS
+- League: ${match.league || 'Unknown'}
+- Home Team: ${match.homeTeam}
+- Away Team: ${match.awayTeam}
+- Date: ${match.date}
+
+${ctx ? `CONTEXT:\n${Object.entries(ctx).map(([k,v])=>`- ${k}: ${typeof v==='string'?v:JSON.stringify(v)}`).join('\n')}\n` : ''}
+
+OUTPUT FORMAT REQUIREMENTS
+You MUST return a JSON object with ALL required fields:
+- homeWinProbability: integer 0-100
+- drawProbability: integer 0-100  
+- awayWinProbability: integer 0-100
+- predictedScoreline: string (e.g., "2-1")
+- confidence: string ("High", "Medium", or "Low")
+- keyFactors: MANDATORY array of objects with "category" and "points" fields. This field is required and must never be empty or missing.
+- goalLine: object with "line" (number), "overProbability" (0-100), "underProbability" (0-100)
+- btts: object with "yesProbability" (0-100), "noProbability" (0-100)
+
+The keyFactors field MUST include tactical analysis, recent form, head-to-head insights, and injury considerations even if data is limited.
+
+Return ONLY the JSON object, no other text.`;
+  
+  return base;
 }
 
 function buildResponseSchema() { return {}; }
