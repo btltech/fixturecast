@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo } from 'react';
+import React, { Suspense, useMemo, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { View } from './types';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -7,6 +7,7 @@ import EnhancedNavigation from './components/EnhancedNavigation';
 import DisclaimerBanner from './components/DisclaimerBanner';
 import Footer from './components/Footer';
 import { useAppContext } from './contexts/AppContext';
+import { mlTrainingDataService } from './services/mlTrainingDataService';
 
 // Lazy load components for code splitting
 const HeroLandingPage = React.lazy(() => import('./components/HeroLandingPage'));
@@ -29,6 +30,20 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const { isLoading } = useAppContext();
   const [selectedLeagueFilter, setSelectedLeagueFilter] = React.useState<'all' | any>('all');
+
+  // Initialize ML training service on app startup
+  useEffect(() => {
+    const initializeMLService = async () => {
+      try {
+        await mlTrainingDataService.initialize();
+        console.log('🤖 ML Training Service initialized');
+      } catch (error) {
+        console.warn('⚠️ ML Training Service initialization failed:', error);
+      }
+    };
+
+    initializeMLService();
+  }, []);
 
   // Helper functions for navigation
   const selectMatch = (match: any) => {

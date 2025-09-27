@@ -8,6 +8,7 @@ import { storeDailyPrediction } from './accuracyService';
 import { withRateLimit } from './rateLimitService';
 import { advancedAnalyticsService } from './advancedAnalyticsService';
 import { realTimeDataService } from './realTimeDataService';
+import { mlTrainingDataService } from './mlTrainingDataService';
 
 const GEMINI_RETRY = 2; // kept for potential retry logic of proxy failures
 const PROXY_ENDPOINT = '/api/ai/gemini/predict';
@@ -370,6 +371,19 @@ OUTPUT FORMAT
       } catch (storageError) {
         console.warn('Failed to store prediction for tracking:', storageError);
       }
+    }
+
+    // Collect ML training data for continuous learning
+    try {
+      await mlTrainingDataService.collectTrainingData(
+        match,
+        predictionData as Prediction,
+        realTimeContext,
+        isLocalDevelopment ? 'deepseek' : 'gemini'
+      );
+      console.log(`🤖 ML training data collected: ${match.homeTeam} vs ${match.awayTeam}`);
+    } catch (mlError) {
+      console.warn('Failed to collect ML training data:', mlError);
     }
 
   return predictionData as Prediction;

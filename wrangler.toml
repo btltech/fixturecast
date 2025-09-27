@@ -9,6 +9,17 @@ binding = "PREDICTIONS_KV"
 id = "f00e18bfc6a44f3d876bd4448003e1f5"
 preview_id = "f00e18bfc6a44f3d876bd4448003e1f5"
 
+# ML Training Database (Cloudflare D1)
+[[env.production.d1_databases]]
+binding = "ML_TRAINING_DB"
+database_name = "fixturecast-ml-training"
+database_id = "your-d1-database-id"  # Will be populated after creation
+
+# ML Model Storage (Cloudflare R2)
+[[env.production.r2_buckets]]
+binding = "ML_MODELS_BUCKET"
+bucket_name = "fixturecast-ml-models"
+
 # Note: Set these environment variables in Cloudflare Pages dashboard:
 # GEMINI_API_KEY = "your-gemini-api-key"
 # FOOTBALL_API_KEY = "your-football-api-key"  
