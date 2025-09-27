@@ -183,8 +183,9 @@ export default {
         const dateOverride = url.searchParams.get('date');
         const resume = url.searchParams.get('resume') === 'true';
         const waveSizeParam = url.searchParams.get('wave');
+        const preferredModel = url.searchParams.get('model'); // optional model override
         const waveSize = waveSizeParam ? Math.min(60, Math.max(1, parseInt(waveSizeParam, 10))) : null; // cap a single wave to 60
-        const result = await triggerPredictionUpdate(env, force, featuredOnly, dateOverride, { resume, waveSize });
+        const result = await triggerPredictionUpdate(env, force, featuredOnly, dateOverride, { resume, waveSize, preferredModel });
         return new Response(JSON.stringify(result), { 
           status: 200,
           headers: { 'Content-Type': 'application/json', ...cors }
@@ -576,7 +577,7 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
     }
     console.log(`📆 Using date ${targetDate} (override=${!!dateOverride})`);
     
-    const { resume = false, waveSize = null } = options;
+  const { resume = false, waveSize = null, preferredModel = null } = options;
 
     // Fetch matches for target date
     let allMatches = [];
@@ -678,7 +679,7 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
       const batchResults = await Promise.all(batch.map(async match => {
         try {
           console.log(`🎯 Generating prediction for: ${match.teams.home.name} vs ${match.teams.away.name}`);
-          const { prediction, attempts } = await generatePredictionWithRetry(match, env, { maxAttempts: 5, baseDelayMs: 400 });
+          const { prediction, attempts } = await generatePredictionWithRetry(match, env, { maxAttempts: 5, baseDelayMs: 400, preferredModel });
           return {
             success: true,
             record: {
@@ -884,7 +885,7 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
 /**
  * Generate prediction using Gemini API
  */
-async function generatePrediction(match, env) {
+async function generatePrediction(match, env, model) {
   const prompt = `Analyze this football match and provide a detailed prediction:
 
 Match: ${match.teams.home.name} vs ${match.teams.away.name}
@@ -902,7 +903,8 @@ Please provide:
 Focus on tactical analysis, recent form, and key factors.`;
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
+  const useModel = model || 'gemini-2.5-flash';
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${useModel}:generateContent?key=${env.GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -933,7 +935,7 @@ Focus on tactical analysis, recent form, and key factors.`;
       predictedScore: '2-1',
       btts: Math.random() > 0.5 ? 'Yes' : 'No',
       overUnder: Math.random() > 0.5 ? 'Over 2.5' : 'Under 2.5',
-      model: 'gemini-2.5-flash',
+  model: useModel,
       generatedAt: new Date().toISOString()
     };
     
@@ -944,19 +946,31 @@ Focus on tactical analysis, recent form, and key factors.`;
 }
 
 // Wrapper with retry & exponential backoff for Gemini calls
-async function generatePredictionWithRetry(match, env, { maxAttempts = 5, baseDelayMs = 300 } = {}) {
+async function generatePredictionWithRetry(match, env, { maxAttempts = 5, baseDelayMs = 300, preferredModel = null } = {}) {
   let attempt = 0;
   let lastErr;
+  const primaryModel = preferredModel || 'gemini-2.5-flash';
+  const fallbackModel = primaryModel === 'gemini-2.5-flash' ? 'gemini-1.5-flash' : 'gemini-2.5-flash';
   while (attempt < maxAttempts) {
     attempt++;
     try {
-      const prediction = await generatePrediction(match, env);
-      return { prediction, attempts: attempt };
+      const prediction = await generatePrediction(match, env, primaryModel);
+      return { prediction, attempts: attempt, modelUsed: primaryModel };
     } catch (e) {
       lastErr = e;
       const msg = (e && e.message) ? e.message.toLowerCase() : '';
       const retriable = msg.includes('429') || msg.includes('rate') || msg.includes('subrequest');
       if (!retriable || attempt === maxAttempts) {
+        if (retriable && attempt === maxAttempts) {
+          // Attempt single fallback model call (no retries on fallback)
+          try {
+            console.log(`🔁 Fallback model attempt using ${fallbackModel}`);
+            const fallbackPred = await generatePrediction(match, env, fallbackModel);
+            return { prediction: fallbackPred, attempts: attempt, modelUsed: fallbackModel, usedFallback: true };
+          } catch (fallbackErr) {
+            throw fallbackErr; // surface fallback error
+          }
+        }
         throw e;
       }
       const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 150);
