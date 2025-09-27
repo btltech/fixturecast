@@ -250,7 +250,16 @@ export class AdvancedPredictionSyncService {
       const response = await fetch(`/api/predictions/${matchId}`);
       if (!response.ok) return null;
       
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('❌ Invalid JSON response from prediction API:', jsonError);
+        const responseText = await response.text();
+        console.error('Raw response:', responseText.substring(0, 500));
+        throw new Error(`Invalid JSON response from prediction API: ${jsonError.message}`);
+      }
+      
       return {
         id: `cloud_${matchId}`,
         matchId,

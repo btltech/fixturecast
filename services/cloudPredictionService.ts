@@ -58,11 +58,29 @@ export class CloudPredictionService {
       const response = await fetch(url.toString(), options);
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (jsonError) {
+          console.error('❌ Invalid JSON in error response:', jsonError);
+          const errorText = await response.text();
+          console.error('Raw error response:', errorText.substring(0, 500));
+          errorData = { error: 'Unknown error' };
+        }
         throw new Error(`Cloud prediction service error: ${errorData.message || response.statusText}`);
       }
 
-      return await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('❌ Invalid JSON response from cloud prediction service:', jsonError);
+        const responseText = await response.text();
+        console.error('Raw response:', responseText.substring(0, 500));
+        throw new Error(`Invalid JSON response from cloud prediction service: ${jsonError.message}`);
+      }
+      
+      return data;
     } catch (error) {
       console.error('Cloud prediction service request failed:', error);
       throw error;

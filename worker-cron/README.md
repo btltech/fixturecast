@@ -10,8 +10,8 @@ Creates a separate Cloudflare Worker that:
 
 ## ⏰ **Cron Schedule**
 
-- **Every 6 hours** (00:00, 06:00, 12:00, 18:00 UTC): Generate predictions
 - **Every hour** (15 minutes past): Update scores and accuracy
+- **Predictions**: Manual trigger only (use `/trigger-predictions` endpoint)
 
 ## 🛠️ **Deployment Steps**
 
@@ -84,7 +84,8 @@ Cloudflare Worker (Cron) → Cloudflare Pages (API) → KV Storage
 ## 📊 **Expected Results**
 
 Once deployed:
-- ✅ **Predictions auto-generate** every 6 hours
+- ✅ **Scores auto-update** every hour
+- ✅ **Predictions generate** only when manually triggered
 - ✅ **Scores update** every hour for accuracy tracking
 - ✅ **Your Pages API** gets called on schedule
 - ✅ **No more manual intervention** needed

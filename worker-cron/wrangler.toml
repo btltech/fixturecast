@@ -11,8 +11,7 @@ preview_id = "f00e18bfc6a44f3d876bd4448003e1f5"
 # Cron Triggers (UK-friendly times)
 [triggers]
 crons = [
-  "0 6,12,18,23 * * *",  # 07:00, 13:00, 19:00, 00:00 London time (BST)
-  "15 * * * *"           # Every hour at 15 minutes past - Update scores
+  "15 * * * *"           # Every hour at 15 minutes past - Update scores only
 ]
 
 # Environment Variables

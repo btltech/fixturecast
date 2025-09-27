@@ -319,7 +319,15 @@ export const makeApiRequest = async (endpoint: string, params: Record<string, an
       console.log(`📡 Response: ${response.status} ${response.statusText}`);
 
       if (response.ok) {
-        const data = await response.json();
+        let data;
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          console.error('❌ Invalid JSON response from API:', jsonError);
+          const responseText = await response.text();
+          console.error('Raw response:', responseText.substring(0, 500));
+          throw new Error(`Invalid JSON response from API: ${jsonError.message}`);
+        }
 
         // Check for rate limiting signal in payload
         if (data?.errors?.rateLimit) {

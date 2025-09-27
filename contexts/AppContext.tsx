@@ -238,7 +238,16 @@ export const AppProvider: React.FC<{ children: ReactNode; value?: Partial<AppCon
                                 if (!currentPredictionsRes.ok) {
                                     console.warn('Predictions file fetch failed:', currentPredictionsRes.status);
                                 } else {
-                                    const currentPredictionsData = await currentPredictionsRes.json();
+                                    let currentPredictionsData;
+                                    try {
+                                        currentPredictionsData = await currentPredictionsRes.json();
+                                    } catch (jsonError) {
+                                        console.error('❌ Invalid JSON response from predictions file:', jsonError);
+                                        const responseText = await currentPredictionsRes.text();
+                                        console.error('Raw predictions response:', responseText.substring(0, 500));
+                                        console.warn('Skipping predictions file due to JSON parse error');
+                                        currentPredictionsData = { predictions: [] };
+                                    }
                                     console.log('🎯 Loaded current predictions:', currentPredictionsData);
                                     if (currentPredictionsData.predictions?.length) {
                                         const todaysPredictions: { [matchId: string]: Prediction } = {};

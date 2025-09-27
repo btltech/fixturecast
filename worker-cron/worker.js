@@ -38,18 +38,17 @@ export default {
       }
       
       // Determine which function to call based on schedule
-      // Support both cron patterns: explicit hours (wrangler.toml) and generic every 6 hours
-      if (event.cron === '0 */6 * * *' || event.cron === '0 6,12,18,23 * * *') {
-        // Every 6 hours: Generate predictions
-        const featuredOnly = env.FEATURED_ONLY_FETCH === 'true';
-        const result = await triggerPredictionUpdate(env, false, featuredOnly);
-        globalThis.lastCronExecution.result = result;
-        globalThis.lastCronExecution.type = 'predictions';
-      } else if (event.cron === '15 * * * *') {
+      // Only score updates are scheduled automatically now
+      if (event.cron === '15 * * * *') {
         // Every hour: Update scores and accuracy
         const result = await triggerScoreUpdate(env);
         globalThis.lastCronExecution.result = result;
         globalThis.lastCronExecution.type = 'scores';
+      } else {
+        // Unknown schedule - log and skip
+        console.log(`⚠️ Unknown cron schedule: ${event.cron} - skipping`);
+        globalThis.lastCronExecution.result = { message: 'Unknown schedule - skipped' };
+        globalThis.lastCronExecution.type = 'unknown';
       }
       
       globalThis.lastCronExecution.status = 'completed';
@@ -217,6 +216,96 @@ export default {
         return new Response(JSON.stringify({ date, featuredOnly, totalFixtures: fixtures.length, missingCount: missing.length, missing }), { headers: { 'Content-Type':'application/json', ...cors }});
       } catch (e) {
         return new Response(JSON.stringify({ error: 'missing-predictions-failed', message: e.message }), { status: 500, headers: { 'Content-Type':'application/json', ...cors }});
+      }
+    }
+
+    // Clear predictions for a specific date
+    if (url.pathname === '/clear-predictions') {
+      const date = url.searchParams.get('date');
+      const confirm = url.searchParams.get('confirm') === 'true';
+      
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return new Response(JSON.stringify({ 
+          error: 'invalid-date', 
+          usage: '/clear-predictions?date=YYYY-MM-DD&confirm=true' 
+        }), { status: 400, headers: { 'Content-Type':'application/json', ...cors }});
+      }
+      
+      if (!confirm) {
+        return new Response(JSON.stringify({ 
+          error: 'confirmation-required', 
+          message: 'Add &confirm=true to confirm clearing predictions' 
+        }), { status: 400, headers: { 'Content-Type':'application/json', ...cors }});
+      }
+      
+      if (!env.PREDICTIONS_KV) {
+        return new Response(JSON.stringify({ error: 'kv-unavailable' }), { 
+          status: 500, headers: { 'Content-Type':'application/json', ...cors }});
+      }
+      
+      try {
+        console.log(`🧹 Clearing predictions for ${date}...`);
+        let clearedKeys = 0;
+        const errors = [];
+        
+        // Clear daily aggregate
+        const dayKey = `daily:${date}:predictions`;
+        await env.PREDICTIONS_KV.delete(dayKey);
+        clearedKeys++;
+        
+        // Clear progress tracking
+        const progressKey = `daily:${date}:progress`;
+        await env.PREDICTIONS_KV.delete(progressKey);
+        clearedKeys++;
+        
+        // Clear individual prediction keys (structured format)
+        const structuredPrefix = `pred:`;
+        const { keys } = await env.PREDICTIONS_KV.list({ prefix: structuredPrefix });
+        
+        for (const key of keys) {
+          if (key.name.includes(`:${date}`)) {
+            try {
+              await env.PREDICTIONS_KV.delete(key.name);
+              clearedKeys++;
+            } catch (err) {
+              errors.push(`Failed to delete ${key.name}: ${err.message}`);
+            }
+          }
+        }
+        
+        // Clear legacy prediction keys
+        const legacyPrefix = `prediction:`;
+        const { keys: legacyKeys } = await env.PREDICTIONS_KV.list({ prefix: legacyPrefix });
+        
+        for (const key of legacyKeys) {
+          try {
+            await env.PREDICTIONS_KV.delete(key.name);
+            clearedKeys++;
+          } catch (err) {
+            errors.push(`Failed to delete legacy ${key.name}: ${err.message}`);
+          }
+        }
+        
+        // Clear recent predictions list
+        await env.PREDICTIONS_KV.delete('recent_predictions');
+        clearedKeys++;
+        
+        console.log(`✅ Cleared ${clearedKeys} keys for ${date}`);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Cleared ${clearedKeys} prediction keys for ${date}`,
+          clearedKeys,
+          date,
+          errors: errors.length > 0 ? errors : undefined
+        }), { headers: { 'Content-Type':'application/json', ...cors }});
+        
+      } catch (error) {
+        console.error('Clear predictions error:', error);
+        return new Response(JSON.stringify({ 
+          error: 'clear-failed', 
+          message: error.message 
+        }), { status: 500, headers: { 'Content-Type':'application/json', ...cors }});
       }
     }
 
@@ -553,6 +642,7 @@ export default {
 Available endpoints:
 - /trigger-predictions (manual prediction update)
 - /trigger-scores (manual score update)
+- /clear-predictions (clear predictions for a date; params: date=YYYY-MM-DD&confirm=true)
 - /test-env (check environment variables)
 - /cron-status (check last cron execution and next triggers)
  - /cron-history (recent cron executions)
@@ -561,8 +651,8 @@ Available endpoints:
  - /backfill-accuracy (recompute historical accuracy; params: date= | start=&end= | days=N [&force=true])
 
 Automated schedules:
-- Predictions: Every 6 hours (6AM, 12PM, 6PM, 11PM UK time)
 - Score updates: Every hour at 15 minutes past
+- Predictions: Manual trigger only (use /trigger-predictions endpoint)
     `, { 
       headers: { 'Content-Type': 'text/plain' }
     });
@@ -927,7 +1017,13 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false,
       fetchMode: featuredOnly ? 'featured-only' : 'global',
       failures,
       persisted: !!env.PREDICTIONS_KV,
-      predictions: predictions.map(p => ({ matchId: p.matchId, leagueId: p.leagueId, homeTeam: p.homeTeam, awayTeam: p.awayTeam })),
+      predictions: predictions.map(p => ({ 
+        matchId: p.matchId, 
+        leagueId: p.leagueId, 
+        homeTeam: p.homeTeam, 
+        awayTeam: p.awayTeam,
+        prediction: p.prediction
+      })),
       date: todayStr,
       resume,
       waveSizeApplied: waveSize || null,
@@ -1006,7 +1102,7 @@ Focus on tactical analysis, recent form, and key factors.`;
 }
 
 // DeepSeek prediction (OpenAI-compatible chat completions style)
-async function generatePredictionDeepSeek(match, env, model = 'deepseek-chat') {
+async function generatePredictionDeepSeek(match, env, model = 'deepseek-reasoner') {
   if (!env.DEEPSEEK_API_KEY) {
     throw new Error('DeepSeek API key not configured');
   }
@@ -1024,7 +1120,7 @@ Confidence: (0-100%)
 Predicted Score: (e.g. 2-1)
 BTTS: (Yes/No)
 Over/Under 2.5: (Over 2.5 / Under 2.5)
-Key Factors: short comma separated.
+Key Factors: Analyze recent form, head-to-head record, team strengths/weaknesses, tactical approach, and match context. Provide 3-5 key factors that influenced your prediction.
 `; 
   try {
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -1055,6 +1151,16 @@ Key Factors: short comma separated.
     const predictedScore = line('Predicted Score').trim() || '1-1';
     const btts = (/yes/i.test(line('BTTS')) ? 'Yes' : /no/i.test(line('BTTS')) ? 'No' : (Math.random()>0.5?'Yes':'No'));
     const overUnder = /over/i.test(line('Over\/Under 2.5')) ? 'Over 2.5' : /under/i.test(line('Over\/Under 2.5')) ? 'Under 2.5' : (Math.random()>0.5?'Over 2.5':'Under 2.5');
+    const keyFactorsRaw = line('Key Factors').trim();
+    let keyFactors = keyFactorsRaw && keyFactorsRaw !== '**' ? keyFactorsRaw : 'Recent form, head-to-head record, team statistics';
+    
+    // If Key Factors extraction failed, try to extract from analysis
+    if (!keyFactors || keyFactors === 'Recent form, head-to-head record, team statistics') {
+      const keyFactorsMatch = content.match(/Key Factors[:\s]*(.*?)(?:\n\n|\n$|$)/is);
+      if (keyFactorsMatch && keyFactorsMatch[1]) {
+        keyFactors = keyFactorsMatch[1].trim();
+      }
+    }
     const confidence = confidenceRaw ? Math.min(100, Math.max(0, parseInt(confidenceRaw,10))) : (60 + Math.floor(Math.random()*25));
     const normalizedOutcome = /home/i.test(outcomeRaw) ? 'Home Win' : /away/i.test(outcomeRaw) ? 'Away Win' : /draw/i.test(outcomeRaw) ? 'Draw' : ['Home Win','Draw','Away Win'][Math.floor(Math.random()*3)];
     return {
@@ -1064,6 +1170,7 @@ Key Factors: short comma separated.
       predictedScore,
       btts,
       overUnder,
+      keyFactors,
       model,
       generatedAt: new Date().toISOString(),
       usedDeepSeek: true
@@ -1081,7 +1188,7 @@ async function generatePredictionWithRetry(match, env, { maxAttempts = 5, baseDe
   const primaryModel = preferredModel || 'gemini-2.5-flash';
   const isPrimaryDeepSeek = /^deepseek/i.test(primaryModel);
   const fallbackGemini = primaryModel === 'gemini-2.5-flash' ? 'gemini-1.5-flash' : 'gemini-2.5-flash';
-  const deepSeekModel = 'deepseek-chat';
+  const deepSeekModel = 'deepseek-reasoner';
   while (attempt < maxAttempts) {
     attempt++;
     try {

@@ -1,5 +1,6 @@
 import { Prediction, Match, PredictionContext } from '../types';
 import { getMatchPrediction as getGeminiPrediction } from './geminiService';
+import { predictionCacheService } from './predictionCacheService';
 
 export type PredictionModel = 'gemini';
 
@@ -25,7 +26,7 @@ export interface UnifiedPredictionResult {
 export class UnifiedPredictionService {
   
   /**
-   * Get prediction using the specified model(s)
+   * Get prediction using the specified model(s) with smart caching
    */
   async getPrediction(
     match: Match,
@@ -33,9 +34,33 @@ export class UnifiedPredictionService {
     model: PredictionModel = 'gemini',
     accuracyStats?: any
   ): Promise<UnifiedPredictionResult> {
-    console.log(`🤖 Generating prediction for ${match.homeTeam} vs ${match.awayTeam} using: Gemini Flash`);
+    console.log(`🤖 Getting prediction for ${match.homeTeam} vs ${match.awayTeam} using: Smart Cache + Gemini Flash`);
+    
+    // First, check if we already have a prediction for this match
+    const existingPrediction = await predictionCacheService.getExistingPrediction(match.id);
+    
+    if (existingPrediction) {
+      console.log(`✅ Using cached prediction for ${match.homeTeam} vs ${match.awayTeam}`);
+      return {
+        primary: {
+          model: 'Gemini 2.5 Flash (Cached)',
+          prediction: existingPrediction,
+          responseTime: 0 // Instant from cache
+        }
+      };
+    }
+
+    // No cached prediction found, generate new one
+    console.log(`🔮 No cached prediction found, generating new prediction for ${match.homeTeam} vs ${match.awayTeam}`);
     const results: UnifiedPredictionResult = {};
     results.primary = await this.runGemini(match, context, accuracyStats);
+    
+    // If prediction was successful, save it to cache
+    if (results.primary?.prediction) {
+      await predictionCacheService.savePrediction(match, results.primary.prediction);
+      console.log(`💾 Prediction saved to cache for future use`);
+    }
+    
     return results;
   }
   
