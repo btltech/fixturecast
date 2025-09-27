@@ -1,8 +1,7 @@
 import { Prediction, Match, PredictionContext } from '../types';
 import { getMatchPrediction as getGeminiPrediction } from './geminiService';
-import { getDeepSeekMatchPrediction } from './deepSeekService';
 
-export type PredictionModel = 'gemini' | 'deepseek' | 'both';
+export type PredictionModel = 'gemini';
 
 export interface ModelPredictionResult {
   model: string;
@@ -21,7 +20,7 @@ export interface UnifiedPredictionResult {
 }
 
 /**
- * Unified prediction service that can use Gemini, DeepSeek, or both models
+ * Unified prediction service that uses Gemini Flash only
  */
 export class UnifiedPredictionService {
   
@@ -29,36 +28,14 @@ export class UnifiedPredictionService {
    * Get prediction using the specified model(s)
    */
   async getPrediction(
-    match: Match, 
-    context?: PredictionContext, 
+    match: Match,
+    context?: PredictionContext,
     model: PredictionModel = 'gemini',
     accuracyStats?: any
   ): Promise<UnifiedPredictionResult> {
-    
-    console.log(`🤖 Generating prediction for ${match.homeTeam} vs ${match.awayTeam} using: ${model}`);
-    
+    console.log(`🤖 Generating prediction for ${match.homeTeam} vs ${match.awayTeam} using: Gemini Flash`);
     const results: UnifiedPredictionResult = {};
-    
-    if (model === 'gemini' || model === 'both') {
-      results.primary = await this.runGemini(match, context, accuracyStats);
-    }
-    
-    if (model === 'deepseek') {
-      results.primary = await this.runDeepSeek(match, context, accuracyStats);
-    }
-    
-    if (model === 'both') {
-      results.secondary = await this.runDeepSeek(match, context, accuracyStats);
-      
-      // Compare results if both succeeded
-      if (results.primary?.prediction && results.secondary?.prediction) {
-        results.comparison = this.comparePredictions(
-          results.primary.prediction,
-          results.secondary.prediction
-        );
-      }
-    }
-    
+    results.primary = await this.runGemini(match, context, accuracyStats);
     return results;
   }
   
@@ -101,44 +78,7 @@ export class UnifiedPredictionService {
     }
   }
   
-  /**
-   * Run DeepSeek prediction with error handling
-   */
-  private async runDeepSeek(match: Match, context?: PredictionContext, accuracyStats?: any): Promise<ModelPredictionResult> {
-    const startTime = Date.now();
-    
-    try {
-      const prediction = await getDeepSeekMatchPrediction(match, context, accuracyStats);
-      const responseTime = Date.now() - startTime;
-      
-      console.log(`✅ DeepSeek completed in ${responseTime}ms`);
-      
-      return {
-        model: 'DeepSeek V3.1 Terminus',
-        prediction,
-        responseTime
-      };
-    } catch (error: any) {
-      const responseTime = Date.now() - startTime;
-      console.error(`❌ DeepSeek failed after ${responseTime}ms:`, error);
-      
-      // Check if it's a rate limit error and provide better messaging
-      const isRateLimitError = 
-        error.message?.toLowerCase().includes('rate limit') ||
-        error.message?.toLowerCase().includes('quota') ||
-        error.message?.toLowerCase().includes('try again later');
-      
-      const errorMessage = isRateLimitError 
-        ? 'DeepSeek rate limit exceeded. Please try again in a few minutes.'
-        : error.message;
-      
-      return {
-        model: 'DeepSeek V3.1 Terminus',
-        error: errorMessage,
-        responseTime
-      };
-    }
-  }
+  // DeepSeek support removed
   
   /**
    * Compare two predictions and identify similarities/differences
@@ -205,15 +145,9 @@ export class UnifiedPredictionService {
   /**
    * Check which models are available
    */
-  getAvailableModels(): { gemini: boolean; deepseek: boolean } {
+  getAvailableModels(): { gemini: boolean } {
     // Gemini now always proxied via server; assume available (server will error if misconfigured)
-    const geminiAvailable = true;
-    const deepseekAvailable = !!(import.meta as any).env?.VITE_DEEPSEEK_API_KEY;
-    
-    return {
-      gemini: geminiAvailable,
-      deepseek: deepseekAvailable
-    };
+    return { gemini: true };
   }
 }
 
@@ -222,18 +156,15 @@ export const unifiedPredictionService = new UnifiedPredictionService();
 
 // Convenience functions for backward compatibility
 export const getMatchPrediction = async (
-  match: Match, 
-  context?: PredictionContext, 
-  accuracyStats?: any,
-  model: PredictionModel = 'gemini'
+  match: Match,
+  context?: PredictionContext,
+  accuracyStats?: any
 ): Promise<Prediction> => {
-  const result = await unifiedPredictionService.getPrediction(match, context, model, accuracyStats);
+  const result = await unifiedPredictionService.getPrediction(match, context, 'gemini', accuracyStats);
   const prediction = unifiedPredictionService.getBestPrediction(result);
-  
   if (!prediction) {
-    throw new Error('Failed to generate prediction with any available model');
+    throw new Error('Failed to generate prediction with Gemini Flash');
   }
-  
   return prediction;
 };
 
@@ -249,7 +180,6 @@ export const retryIncompletePredictions = async (
   matches: Match[],
   isPredictionComplete: (match: Match) => boolean,
   context?: PredictionContext,
-  model: PredictionModel = 'gemini',
   delayMs: number = 60000
 ) => {
   for (const match of matches) {
@@ -259,7 +189,7 @@ export const retryIncompletePredictions = async (
     }
     console.log(`🔄 Retrying prediction for ${match.homeTeam} vs ${match.awayTeam}...`);
     try {
-      await getMatchPrediction(match, context, undefined, model);
+      await getMatchPrediction(match, context);
       console.log(`🎯 Prediction retried for ${match.homeTeam} vs ${match.awayTeam}`);
     } catch (err) {
       console.error(`❌ Failed to retry prediction for ${match.homeTeam} vs ${match.awayTeam}:`, err);
