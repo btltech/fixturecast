@@ -180,7 +180,8 @@ export default {
       try {
         const force = url.searchParams.get('force') === 'true';
         const featuredOnly = url.searchParams.get('featuredOnly') === 'true' || env.FEATURED_ONLY_FETCH === 'true';
-        const result = await triggerPredictionUpdate(env, force, featuredOnly);
+        const dateOverride = url.searchParams.get('date');
+        const result = await triggerPredictionUpdate(env, force, featuredOnly, dateOverride);
         return new Response(JSON.stringify(result), { 
           status: 200,
           headers: { 'Content-Type': 'application/json', ...cors }
@@ -332,18 +333,27 @@ async function fetchFeaturedLeagueFixtures(dateStr, env) {
 /**
  * Trigger prediction generation directly in Worker
  */
-async function triggerPredictionUpdate(env, force = false, featuredOnly = false) {
+async function triggerPredictionUpdate(env, force = false, featuredOnly = false, dateOverride = null) {
   console.log('🤖 Triggering prediction update...');
   
   try {
-    // Get today's matches from Football API
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Resolve target date (supports optional override for backfill/testing)
+    let targetDate = new Date().toISOString().split('T')[0];
+    if (dateOverride) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOverride)) {
+        return { error: 'invalid-date-format', message: 'Use YYYY-MM-DD', provided: dateOverride };
+      }
+      targetDate = dateOverride;
+    }
+    console.log(`📆 Using date ${targetDate} (override=${!!dateOverride})`);
+    
+    // Fetch matches for target date
     let allMatches = [];
     if (featuredOnly) {
       console.log('🎯 Featured-only fetch enabled (param or env). Fetching per league...');
-      allMatches = await fetchFeaturedLeagueFixtures(today, env);
+      allMatches = await fetchFeaturedLeagueFixtures(targetDate, env);
     } else {
-      const footballResponse = await fetch(`https://v3.football.api-sports.io/fixtures?date=${today}`, {
+      const footballResponse = await fetch(`https://v3.football.api-sports.io/fixtures?date=${targetDate}`, {
         method: 'GET',
         headers: {
           'x-apisports-key': env.FOOTBALL_API_KEY
@@ -353,17 +363,17 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false)
         throw new Error(`Football API error: ${footballResponse.status}`);
       }
       const footballData = await footballResponse.json();
-      console.log(`📅 Found ${footballData.response?.length || 0} matches for today (global fetch)`);
+      console.log(`📅 Found ${footballData.response?.length || 0} matches for date ${targetDate} (global fetch)`);
       allMatches = footballData.response || [];
     }
     
     if (!allMatches || allMatches.length === 0) {
-      console.log('📅 No matches found for today');
-      return { message: 'No matches found for today', processedPredictions: 0 };
+      console.log('📅 No matches found for target date');
+      return { message: 'No matches found for target date', date: targetDate, processedPredictions: 0 };
     }
     
     // Idempotency (Feature C): if daily aggregate already exists and not forced, skip generation
-    const todayStr = new Date().toISOString().slice(0,10);
+    const todayStr = targetDate; // use target date for idempotency key
     if (env.PREDICTIONS_KV && !force) {
       try {
         const existingDaily = await env.PREDICTIONS_KV.get(`daily:${todayStr}:predictions`);
@@ -434,7 +444,7 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false)
     if (env.PREDICTIONS_KV) {
       try {
         const modelVersion = 'gemini-2.5-flash';
-        const dataVersion = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+  const dataVersion = todayStr; // align with target date
         const recentKey = 'recent_predictions';
         let recentList = [];
         try {
@@ -474,7 +484,7 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false)
         await env.PREDICTIONS_KV.put(recentKey, JSON.stringify(recentList));
 
         // Daily aggregate key
-        const dayKey = `daily:${dataVersion}:predictions`; 
+    const dayKey = `daily:${dataVersion}:predictions`; 
         await env.PREDICTIONS_KV.put(dayKey, JSON.stringify({
           date: dataVersion,
           generatedAt: new Date().toISOString(),
@@ -508,7 +518,8 @@ async function triggerPredictionUpdate(env, force = false, featuredOnly = false)
       fetchMode: featuredOnly ? 'featured-only' : 'global',
       failures,
       persisted: !!env.PREDICTIONS_KV,
-      predictions
+      predictions,
+      date: todayStr
     };
     
   } catch (error) {
